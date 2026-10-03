@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -26,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.launch
 
 // =============================================================
 // EXPANDED DATA MODELS FOR O/L MATHEMATICS (GRADES 10 & 11)
@@ -447,64 +450,196 @@ object MathAdvancedSyllabusRepository {
 }
 
 // =============================================================
-// EXPANDED MODULE VIEWS & COMPONENT BUILDERS
+// EXPANDED MODULE VIEWS & COMPONENT BUILDERS (WITH INTERNAL SCROLLING)
 // =============================================================
 
 @Composable
 fun MathConstructionsSubSection(
   items: List<MathConstructionItem>,
-  grade: String
+  grade: String,
+  onOpenFullscreen: () -> Unit = {}
 ) {
+  var searchQuery by remember { mutableStateOf("") }
+  val scrollState = rememberScrollState()
+  val coroutineScope = rememberCoroutineScope()
+
+  val filteredItems = remember(items, searchQuery) {
+    if (searchQuery.isBlank()) items
+    else items.filter {
+      it.title.contains(searchQuery, ignoreCase = true) ||
+      it.toolType.contains(searchQuery, ignoreCase = true) ||
+      it.requiredTools.contains(searchQuery, ignoreCase = true) ||
+      it.steps.any { s -> s.contains(searchQuery, ignoreCase = true) }
+    }
+  }
+
   Column(
     modifier = Modifier
       .fillMaxWidth()
-      .clip(RoundedCornerShape(8.dp))
+      .clip(RoundedCornerShape(10.dp))
       .background(Color(0xFF042F2E))
-      .padding(8.dp),
-    verticalArrangement = Arrangement.spacedBy(8.dp)
+      .padding(8.dp)
   ) {
-    Text(
-      text = "📏 $grade ශ්‍රේණිය - ජ්‍යාමිතික නිර්මාණ පියවරෙන් පියවර මාර්ගෝපදේශය",
-      fontSize = 11.5.sp,
-      fontWeight = FontWeight.Bold,
-      color = Color(0xFF5EEAD4)
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("📏", fontSize = 13.sp)
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+          text = "$grade ශ්‍රේණිය - ජ්‍යාමිතික නිර්මාණ (${filteredItems.size}/${items.size})",
+          fontSize = 11.5.sp,
+          fontWeight = FontWeight.Bold,
+          color = Color(0xFF5EEAD4)
+        )
+      }
+      IconButton(
+        onClick = onOpenFullscreen,
+        modifier = Modifier.size(26.dp)
+      ) {
+        Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Color(0xFF5EEAD4), modifier = Modifier.size(18.dp))
+      }
+    }
+
+    Spacer(modifier = Modifier.height(4.dp))
+
+    // Search Box
+    OutlinedTextField(
+      value = searchQuery,
+      onValueChange = { searchQuery = it },
+      placeholder = { Text("නිර්මාණ වර්ගය හෝ පියවර සොයන්න...", fontSize = 9.sp, color = Color(0xFF99F6E4).copy(alpha = 0.6f)) },
+      singleLine = true,
+      modifier = Modifier
+        .fillMaxWidth()
+        .height(42.dp),
+      colors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        focusedBorderColor = Color(0xFF14B8A6),
+        unfocusedBorderColor = Color(0xFF0D9488).copy(alpha = 0.5f),
+        focusedContainerColor = Color(0xFF134E4A),
+        unfocusedContainerColor = Color(0xFF134E4A)
+      ),
+      trailingIcon = {
+        if (searchQuery.isNotEmpty()) {
+          IconButton(onClick = { searchQuery = "" }) {
+            Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.LightGray, modifier = Modifier.size(14.dp))
+          }
+        }
+      }
     )
 
-    items.forEach { item ->
-      var isExpanded by remember { mutableStateOf(false) }
-      Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = Color(0xFF134E4A),
-        border = BorderStroke(1.dp, Color(0xFF0D9488)),
-        modifier = Modifier
-          .fillMaxWidth()
-          .clickable { isExpanded = !isExpanded }
-      ) {
-        Column(modifier = Modifier.padding(8.dp)) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Text(item.title, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF0D9488)) {
-              Text(item.toolType, fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(4.dp, 1.dp))
-            }
-          }
-          Spacer(modifier = Modifier.height(3.dp))
-          Text("උපකරණ: ${item.requiredTools}", fontSize = 9.sp, color = Color(0xFF99F6E4))
+    Spacer(modifier = Modifier.height(6.dp))
 
-          if (isExpanded) {
-            Spacer(modifier = Modifier.height(6.dp))
-            Text("නිර්මාණ පියවර:", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFFCCFBF1))
-            item.steps.forEachIndexed { i, s ->
-              Text("${i + 1}. $s", fontSize = 9.sp, color = Color.White)
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF042F2E), modifier = Modifier.fillMaxWidth()) {
-              Column(modifier = Modifier.padding(6.dp)) {
-                Text("💡 විභාග උපදෙස්: ${item.examTips}", fontSize = 8.5.sp, color = Color(0xFFFEF08A))
-                Text("📝 ලකුණු බෙදීම: ${item.markingSchemeNote}", fontSize = 8.5.sp, color = Color(0xFF86EFAC))
+    // Scroll Control Bar
+    Surface(
+      shape = RoundedCornerShape(6.dp),
+      color = Color(0xFF115E59),
+      modifier = Modifier.fillMaxWidth()
+    ) {
+      Row(
+        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text("↕️", fontSize = 10.sp)
+          Spacer(modifier = Modifier.width(4.dp))
+          Text(
+            text = "ඉහල පහල scroll කරන්න (${filteredItems.size}ක්)",
+            fontSize = 9.sp,
+            color = Color(0xFFCCFBF1)
+          )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+          Surface(
+            onClick = { coroutineScope.launch { scrollState.animateScrollTo(0) } },
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFF0D9488)
+          ) {
+            Text("⬆️ ඉහළට", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+          }
+          Surface(
+            onClick = { coroutineScope.launch { scrollState.animateScrollTo(scrollState.maxValue) } },
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFF0D9488)
+          ) {
+            Text("⬇️ පහළට", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+          }
+          Surface(
+            onClick = onOpenFullscreen,
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFF0F766E)
+          ) {
+            Text("⛶ විශාල කර", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+          }
+        }
+      }
+    }
+
+    Spacer(modifier = Modifier.height(6.dp))
+
+    // Internal Scrollable Container
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .heightIn(min = 260.dp, max = 500.dp)
+        .verticalScroll(scrollState),
+      verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+      if (filteredItems.isEmpty()) {
+        Box(
+          modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+          contentAlignment = Alignment.Center
+        ) {
+          Text("ගැළපෙන ජ්‍යාමිතික නිර්මාණ හමු නොවීය.", color = Color(0xFF99F6E4), fontSize = 10.sp)
+        }
+      } else {
+        filteredItems.forEach { item ->
+          var isExpanded by remember { mutableStateOf(false) }
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFF134E4A),
+            border = BorderStroke(1.dp, Color(0xFF0D9488)),
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable { isExpanded = !isExpanded }
+          ) {
+            Column(modifier = Modifier.padding(8.dp)) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Text(item.title, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF0D9488)) {
+                  Text(item.toolType, fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(4.dp, 1.dp))
+                }
+              }
+              Spacer(modifier = Modifier.height(3.dp))
+              Text("උපකරණ: ${item.requiredTools}", fontSize = 9.sp, color = Color(0xFF99F6E4))
+
+              if (isExpanded) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text("නිර්මාණ පියවර:", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFFCCFBF1))
+                item.steps.forEachIndexed { i, s ->
+                  Text("${i + 1}. $s", fontSize = 9.sp, color = Color.White)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF042F2E), modifier = Modifier.fillMaxWidth()) {
+                  Column(modifier = Modifier.padding(6.dp)) {
+                    Text("💡 විභාග උපදෙස්: ${item.examTips}", fontSize = 8.5.sp, color = Color(0xFFFEF08A))
+                    Text("📝 ලකුණු බෙදීම: ${item.markingSchemeNote}", fontSize = 8.5.sp, color = Color(0xFF86EFAC))
+                  }
+                }
+              } else {
+                Text(
+                  text = "සියලු පියවර & ලකුණු ලබාදෙන ආකාරය බැලීමට ක්ලික් කරන්න ▾",
+                  fontSize = 8.sp,
+                  color = Color(0xFF5EEAD4).copy(alpha = 0.8f)
+                )
               }
             }
           }
@@ -517,48 +652,179 @@ fun MathConstructionsSubSection(
 @Composable
 fun MathLogarithmsSubSection(
   items: List<MathLogarithmItem>,
-  grade: String
+  grade: String,
+  onOpenFullscreen: () -> Unit = {}
 ) {
+  var searchQuery by remember { mutableStateOf("") }
+  val scrollState = rememberScrollState()
+  val coroutineScope = rememberCoroutineScope()
+
+  val filteredItems = remember(items, searchQuery) {
+    if (searchQuery.isBlank()) items
+    else items.filter {
+      it.topic.contains(searchQuery, ignoreCase = true) ||
+      it.lawOrRule.contains(searchQuery, ignoreCase = true) ||
+      it.characteristicExplanation.contains(searchQuery, ignoreCase = true)
+    }
+  }
+
   Column(
     modifier = Modifier
       .fillMaxWidth()
-      .clip(RoundedCornerShape(8.dp))
+      .clip(RoundedCornerShape(10.dp))
       .background(Color(0xFF451A03))
-      .padding(8.dp),
-    verticalArrangement = Arrangement.spacedBy(8.dp)
+      .padding(8.dp)
   ) {
-    Text(
-      text = "🧮 $grade ශ්‍රේණිය - ලඝුගණක, විද්‍යාත්මක අංකනය & 4-කැපී පෙනෙන වගු",
-      fontSize = 11.5.sp,
-      fontWeight = FontWeight.Bold,
-      color = Color(0xFFFDE68A)
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("🧮", fontSize = 13.sp)
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+          text = "$grade ශ්‍රේණිය - ලඝුගණක & දර්ශක (${filteredItems.size}/${items.size})",
+          fontSize = 11.5.sp,
+          fontWeight = FontWeight.Bold,
+          color = Color(0xFFFDE68A)
+        )
+      }
+      IconButton(
+        onClick = onOpenFullscreen,
+        modifier = Modifier.size(26.dp)
+      ) {
+        Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Color(0xFFFDE68A), modifier = Modifier.size(18.dp))
+      }
+    }
+
+    Spacer(modifier = Modifier.height(4.dp))
+
+    // Search Box
+    OutlinedTextField(
+      value = searchQuery,
+      onValueChange = { searchQuery = it },
+      placeholder = { Text("ලඝු නීති හෝ මාතෘකා සොයන්න...", fontSize = 9.sp, color = Color(0xFFFDE68A).copy(alpha = 0.6f)) },
+      singleLine = true,
+      modifier = Modifier
+        .fillMaxWidth()
+        .height(42.dp),
+      colors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        focusedBorderColor = Color(0xFFF59E0B),
+        unfocusedBorderColor = Color(0xFFD97706).copy(alpha = 0.5f),
+        focusedContainerColor = Color(0xFF78350F),
+        unfocusedContainerColor = Color(0xFF78350F)
+      ),
+      trailingIcon = {
+        if (searchQuery.isNotEmpty()) {
+          IconButton(onClick = { searchQuery = "" }) {
+            Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.LightGray, modifier = Modifier.size(14.dp))
+          }
+        }
+      }
     )
 
-    items.forEach { item ->
-      var isExpanded by remember { mutableStateOf(false) }
-      Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = Color(0xFF78350F),
-        border = BorderStroke(1.dp, Color(0xFFD97706)),
-        modifier = Modifier
-          .fillMaxWidth()
-          .clickable { isExpanded = !isExpanded }
-      ) {
-        Column(modifier = Modifier.padding(8.dp)) {
-          Text(item.topic, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
-          Spacer(modifier = Modifier.height(2.dp))
-          Text("නීතිය/සූත්‍රය: ${item.lawOrRule}", fontSize = 9.5.sp, fontFamily = FontFamily.Monospace, color = Color(0xFFFDE047))
+    Spacer(modifier = Modifier.height(6.dp))
 
-          if (isExpanded) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text("ලක්ෂණය: ${item.characteristicExplanation}", fontSize = 9.sp, color = Color(0xFFFEF3C7))
-            Spacer(modifier = Modifier.height(4.dp))
-            Text("ගණනය කිරීමේ පියවර:", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFBBF24))
-            item.workedSteps.forEach { step ->
-              Text("➔ $step", fontSize = 9.sp, color = Color.White)
+    // Scroll Control Bar
+    Surface(
+      shape = RoundedCornerShape(6.dp),
+      color = Color(0xFF92400E),
+      modifier = Modifier.fillMaxWidth()
+    ) {
+      Row(
+        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text("↕️", fontSize = 10.sp)
+          Spacer(modifier = Modifier.width(4.dp))
+          Text(
+            text = "ඉහල පහල scroll කරන්න (${filteredItems.size}ක්)",
+            fontSize = 9.sp,
+            color = Color(0xFFFEF3C7)
+          )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+          Surface(
+            onClick = { coroutineScope.launch { scrollState.animateScrollTo(0) } },
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFFD97706)
+          ) {
+            Text("⬆️ ඉහළට", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+          }
+          Surface(
+            onClick = { coroutineScope.launch { scrollState.animateScrollTo(scrollState.maxValue) } },
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFFD97706)
+          ) {
+            Text("⬇️ පහළට", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+          }
+          Surface(
+            onClick = onOpenFullscreen,
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFFB45309)
+          ) {
+            Text("⛶ විශාල කර", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+          }
+        }
+      }
+    }
+
+    Spacer(modifier = Modifier.height(6.dp))
+
+    // Internal Scrollable Container
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .heightIn(min = 260.dp, max = 500.dp)
+        .verticalScroll(scrollState),
+      verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+      if (filteredItems.isEmpty()) {
+        Box(
+          modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+          contentAlignment = Alignment.Center
+        ) {
+          Text("ගැළපෙන ලඝුගණක පාඩම් හමු නොවීය.", color = Color(0xFFFDE68A), fontSize = 10.sp)
+        }
+      } else {
+        filteredItems.forEach { item ->
+          var isExpanded by remember { mutableStateOf(false) }
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFF78350F),
+            border = BorderStroke(1.dp, Color(0xFFD97706)),
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable { isExpanded = !isExpanded }
+          ) {
+            Column(modifier = Modifier.padding(8.dp)) {
+              Text(item.topic, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+              Spacer(modifier = Modifier.height(2.dp))
+              Text("නීතිය/සූත්‍රය: ${item.lawOrRule}", fontSize = 9.5.sp, fontFamily = FontFamily.Monospace, color = Color(0xFFFDE047))
+
+              if (isExpanded) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("ලක්ෂණය: ${item.characteristicExplanation}", fontSize = 9.sp, color = Color(0xFFFEF3C7))
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("ගණනය කිරීමේ පියවර:", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFBBF24))
+                item.workedSteps.forEach { step ->
+                  Text("➔ $step", fontSize = 9.sp, color = Color.White)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("අවසාන අගය: ${item.finalValue}", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4ADE80))
+              } else {
+                Text(
+                  text = "විසඳූ උදාහරණ සහ ලක්ෂණය බලන්න ▾",
+                  fontSize = 8.sp,
+                  color = Color(0xFFFDE68A).copy(alpha = 0.8f)
+                )
+              }
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text("අවසාන අගය: ${item.finalValue}", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4ADE80))
           }
         }
       }
@@ -569,57 +835,188 @@ fun MathLogarithmsSubSection(
 @Composable
 fun MathVennSubSection(
   items: List<MathVennDiagramItem>,
-  grade: String
+  grade: String,
+  onOpenFullscreen: () -> Unit = {}
 ) {
+  var searchQuery by remember { mutableStateOf("") }
+  val scrollState = rememberScrollState()
+  val coroutineScope = rememberCoroutineScope()
+
+  val filteredItems = remember(items, searchQuery) {
+    if (searchQuery.isBlank()) items
+    else items.filter {
+      it.title.contains(searchQuery, ignoreCase = true) ||
+      it.formulaUsed.contains(searchQuery, ignoreCase = true) ||
+      it.sampleExamProblem.contains(searchQuery, ignoreCase = true)
+    }
+  }
+
   Column(
     modifier = Modifier
       .fillMaxWidth()
-      .clip(RoundedCornerShape(8.dp))
+      .clip(RoundedCornerShape(10.dp))
       .background(Color(0xFF2E1065))
-      .padding(8.dp),
-    verticalArrangement = Arrangement.spacedBy(8.dp)
+      .padding(8.dp)
   ) {
-    Text(
-      text = "⭕ $grade ශ්‍රේණිය - කුලක සහ වෙන් රූප සටහන් (Sets & Regions)",
-      fontSize = 11.5.sp,
-      fontWeight = FontWeight.Bold,
-      color = Color(0xFFDDD6FE)
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("⭕", fontSize = 13.sp)
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+          text = "$grade ශ්‍රේණිය - කුලක & වෙන් රූප (${filteredItems.size}/${items.size})",
+          fontSize = 11.5.sp,
+          fontWeight = FontWeight.Bold,
+          color = Color(0xFFDDD6FE)
+        )
+      }
+      IconButton(
+        onClick = onOpenFullscreen,
+        modifier = Modifier.size(26.dp)
+      ) {
+        Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Color(0xFFDDD6FE), modifier = Modifier.size(18.dp))
+      }
+    }
+
+    Spacer(modifier = Modifier.height(4.dp))
+
+    // Search Box
+    OutlinedTextField(
+      value = searchQuery,
+      onValueChange = { searchQuery = it },
+      placeholder = { Text("කුලක සූත්‍ර හෝ ප්‍රශ්න සොයන්න...", fontSize = 9.sp, color = Color(0xFFDDD6FE).copy(alpha = 0.6f)) },
+      singleLine = true,
+      modifier = Modifier
+        .fillMaxWidth()
+        .height(42.dp),
+      colors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        focusedBorderColor = Color(0xFFA855F7),
+        unfocusedBorderColor = Color(0xFF7C3AED).copy(alpha = 0.5f),
+        focusedContainerColor = Color(0xFF4C1D95),
+        unfocusedContainerColor = Color(0xFF4C1D95)
+      ),
+      trailingIcon = {
+        if (searchQuery.isNotEmpty()) {
+          IconButton(onClick = { searchQuery = "" }) {
+            Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.LightGray, modifier = Modifier.size(14.dp))
+          }
+        }
+      }
     )
 
-    items.forEach { item ->
-      var isExpanded by remember { mutableStateOf(false) }
-      Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = Color(0xFF4C1D95),
-        border = BorderStroke(1.dp, Color(0xFF8B5CF6)),
-        modifier = Modifier
-          .fillMaxWidth()
-          .clickable { isExpanded = !isExpanded }
-      ) {
-        Column(modifier = Modifier.padding(8.dp)) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Text(item.title, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF7C3AED)) {
-              Text("කුලක ${item.setsCount}", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(4.dp, 1.dp))
-            }
-          }
-          Spacer(modifier = Modifier.height(3.dp))
-          Text("සූත්‍රය: ${item.formulaUsed}", fontSize = 9.5.sp, fontFamily = FontFamily.Monospace, color = Color(0xFFFDE047))
+    Spacer(modifier = Modifier.height(6.dp))
 
-          if (isExpanded) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text("ප්‍රදේශ සෙවනැලි කිරීම:", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFFA78BFA))
-            item.regionsDescription.forEach { reg -> Text("• $reg", fontSize = 8.5.sp, color = Color.White) }
-            Spacer(modifier = Modifier.height(4.dp))
-            Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF1E1B4B), modifier = Modifier.fillMaxWidth()) {
-              Column(modifier = Modifier.padding(6.dp)) {
-                Text("ගැටලුව: ${item.sampleExamProblem}", fontSize = 8.5.sp, color = Color(0xFFFDE68A))
-                item.stepByStepSolution.forEach { s -> Text("➔ $s", fontSize = 8.5.sp, color = Color.White) }
-                Text("පිළිතුර: ${item.finalAnswer}", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4ADE80))
+    // Scroll Control Bar
+    Surface(
+      shape = RoundedCornerShape(6.dp),
+      color = Color(0xFF581C87),
+      modifier = Modifier.fillMaxWidth()
+    ) {
+      Row(
+        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text("↕️", fontSize = 10.sp)
+          Spacer(modifier = Modifier.width(4.dp))
+          Text(
+            text = "ඉහල පහල scroll කරන්න (${filteredItems.size}ක්)",
+            fontSize = 9.sp,
+            color = Color(0xFFF3E8FF)
+          )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+          Surface(
+            onClick = { coroutineScope.launch { scrollState.animateScrollTo(0) } },
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFF7C3AED)
+          ) {
+            Text("⬆️ ඉහළට", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+          }
+          Surface(
+            onClick = { coroutineScope.launch { scrollState.animateScrollTo(scrollState.maxValue) } },
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFF7C3AED)
+          ) {
+            Text("⬇️ පහළට", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+          }
+          Surface(
+            onClick = onOpenFullscreen,
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFF6B21A8)
+          ) {
+            Text("⛶ විශාල කර", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+          }
+        }
+      }
+    }
+
+    Spacer(modifier = Modifier.height(6.dp))
+
+    // Internal Scrollable Container
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .heightIn(min = 260.dp, max = 500.dp)
+        .verticalScroll(scrollState),
+      verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+      if (filteredItems.isEmpty()) {
+        Box(
+          modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+          contentAlignment = Alignment.Center
+        ) {
+          Text("ගැළපෙන කුලක ගැටලු හමු නොවීය.", color = Color(0xFFDDD6FE), fontSize = 10.sp)
+        }
+      } else {
+        filteredItems.forEach { item ->
+          var isExpanded by remember { mutableStateOf(false) }
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFF4C1D95),
+            border = BorderStroke(1.dp, Color(0xFF8B5CF6)),
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable { isExpanded = !isExpanded }
+          ) {
+            Column(modifier = Modifier.padding(8.dp)) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Text(item.title, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF7C3AED)) {
+                  Text("කුලක ${item.setsCount}", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(4.dp, 1.dp))
+                }
+              }
+              Spacer(modifier = Modifier.height(3.dp))
+              Text("සූත්‍රය: ${item.formulaUsed}", fontSize = 9.5.sp, fontFamily = FontFamily.Monospace, color = Color(0xFFFDE047))
+
+              if (isExpanded) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("ප්‍රදේශ සෙවනැලි කිරීම:", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFFA78BFA))
+                item.regionsDescription.forEach { reg -> Text("• $reg", fontSize = 8.5.sp, color = Color.White) }
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF1E1B4B), modifier = Modifier.fillMaxWidth()) {
+                  Column(modifier = Modifier.padding(6.dp)) {
+                    Text("ගැටලුව: ${item.sampleExamProblem}", fontSize = 8.5.sp, color = Color(0xFFFDE68A))
+                    item.stepByStepSolution.forEach { s -> Text("➔ $s", fontSize = 8.5.sp, color = Color.White) }
+                    Text("පිළිතුර: ${item.finalAnswer}", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4ADE80))
+                  }
+                }
+              } else {
+                Text(
+                  text = "ප්‍රදේශ සෙවනැලි කිරීම සහ පියවර බලන්න ▾",
+                  fontSize = 8.sp,
+                  color = Color(0xFFDDD6FE).copy(alpha = 0.8f)
+                )
               }
             }
           }
@@ -632,48 +1029,180 @@ fun MathVennSubSection(
 @Composable
 fun MathProgressionsSubSection(
   items: List<MathProgressionItem>,
-  grade: String
+  grade: String,
+  onOpenFullscreen: () -> Unit = {}
 ) {
+  var searchQuery by remember { mutableStateOf("") }
+  val scrollState = rememberScrollState()
+  val coroutineScope = rememberCoroutineScope()
+
+  val filteredItems = remember(items, searchQuery) {
+    if (searchQuery.isBlank()) items
+    else items.filter {
+      it.type.contains(searchQuery, ignoreCase = true) ||
+      it.generalTermFormula.contains(searchQuery, ignoreCase = true) ||
+      it.sumFormula.contains(searchQuery, ignoreCase = true) ||
+      it.examProblem.contains(searchQuery, ignoreCase = true)
+    }
+  }
+
   Column(
     modifier = Modifier
       .fillMaxWidth()
-      .clip(RoundedCornerShape(8.dp))
+      .clip(RoundedCornerShape(10.dp))
       .background(Color(0xFF500724))
-      .padding(8.dp),
-    verticalArrangement = Arrangement.spacedBy(8.dp)
+      .padding(8.dp)
   ) {
-    Text(
-      text = "🔢 $grade ශ්‍රේණිය - සමාන්තර & ගුණෝත්තර ශ්‍රේඪි (AP & GP)",
-      fontSize = 11.5.sp,
-      fontWeight = FontWeight.Bold,
-      color = Color(0xFFFBCFE8)
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("🔢", fontSize = 13.sp)
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+          text = "$grade ශ්‍රේණිය - සමාන්තර & ගුණෝත්තර ශ්‍රේඪි (${filteredItems.size}/${items.size})",
+          fontSize = 11.5.sp,
+          fontWeight = FontWeight.Bold,
+          color = Color(0xFFFBCFE8)
+        )
+      }
+      IconButton(
+        onClick = onOpenFullscreen,
+        modifier = Modifier.size(26.dp)
+      ) {
+        Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Color(0xFFFBCFE8), modifier = Modifier.size(18.dp))
+      }
+    }
+
+    Spacer(modifier = Modifier.height(4.dp))
+
+    // Search Box
+    OutlinedTextField(
+      value = searchQuery,
+      onValueChange = { searchQuery = it },
+      placeholder = { Text("ශ්‍රේඪි වර්ගය හෝ සූත්‍ර සොයන්න...", fontSize = 9.sp, color = Color(0xFFFBCFE8).copy(alpha = 0.6f)) },
+      singleLine = true,
+      modifier = Modifier
+        .fillMaxWidth()
+        .height(42.dp),
+      colors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        focusedBorderColor = Color(0xFFEC4899),
+        unfocusedBorderColor = Color(0xFFDB2777).copy(alpha = 0.5f),
+        focusedContainerColor = Color(0xFF831843),
+        unfocusedContainerColor = Color(0xFF831843)
+      ),
+      trailingIcon = {
+        if (searchQuery.isNotEmpty()) {
+          IconButton(onClick = { searchQuery = "" }) {
+            Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.LightGray, modifier = Modifier.size(14.dp))
+          }
+        }
+      }
     )
 
-    items.forEach { item ->
-      var isExpanded by remember { mutableStateOf(false) }
-      Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = Color(0xFF831843),
-        border = BorderStroke(1.dp, Color(0xFFDB2777)),
-        modifier = Modifier
-          .fillMaxWidth()
-          .clickable { isExpanded = !isExpanded }
-      ) {
-        Column(modifier = Modifier.padding(8.dp)) {
-          Text(item.type, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
-          Spacer(modifier = Modifier.height(3.dp))
-          Text("සාධාරණ පදය: ${item.generalTermFormula}", fontSize = 9.5.sp, fontFamily = FontFamily.Monospace, color = Color(0xFFFDE047))
-          Text("ඓක්‍යය සූත්‍රය: ${item.sumFormula}", fontSize = 9.5.sp, fontFamily = FontFamily.Monospace, color = Color(0xFF93C5FD))
+    Spacer(modifier = Modifier.height(6.dp))
 
-          if (isExpanded) {
-            Spacer(modifier = Modifier.height(4.dp))
-            item.properties.forEach { p -> Text("• $p", fontSize = 8.5.sp, color = Color(0xFFFCE7F3)) }
-            Spacer(modifier = Modifier.height(4.dp))
-            Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF4C0519), modifier = Modifier.fillMaxWidth()) {
-              Column(modifier = Modifier.padding(6.dp)) {
-                Text("ආදර්ශ ගැටලුව: ${item.examProblem}", fontSize = 8.5.sp, color = Color(0xFFFDE68A))
-                item.stepWorking.forEach { step -> Text("➔ $step", fontSize = 8.5.sp, color = Color.White) }
-                Text("ප්‍රතිඵලය: ${item.finalResult}", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4ADE80))
+    // Scroll Control Bar
+    Surface(
+      shape = RoundedCornerShape(6.dp),
+      color = Color(0xFF9D174D),
+      modifier = Modifier.fillMaxWidth()
+    ) {
+      Row(
+        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text("↕️", fontSize = 10.sp)
+          Spacer(modifier = Modifier.width(4.dp))
+          Text(
+            text = "ඉහල පහල scroll කරන්න (${filteredItems.size}ක්)",
+            fontSize = 9.sp,
+            color = Color(0xFFFCE7F3)
+          )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+          Surface(
+            onClick = { coroutineScope.launch { scrollState.animateScrollTo(0) } },
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFFDB2777)
+          ) {
+            Text("⬆️ ඉහළට", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+          }
+          Surface(
+            onClick = { coroutineScope.launch { scrollState.animateScrollTo(scrollState.maxValue) } },
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFFDB2777)
+          ) {
+            Text("⬇️ පහළට", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+          }
+          Surface(
+            onClick = onOpenFullscreen,
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFFBE185D)
+          ) {
+            Text("⛶ විශාල කර", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+          }
+        }
+      }
+    }
+
+    Spacer(modifier = Modifier.height(6.dp))
+
+    // Internal Scrollable Container
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .heightIn(min = 260.dp, max = 500.dp)
+        .verticalScroll(scrollState),
+      verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+      if (filteredItems.isEmpty()) {
+        Box(
+          modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+          contentAlignment = Alignment.Center
+        ) {
+          Text("ගැළපෙන ශ්‍රේඪි පාඩම් හමු නොවීය.", color = Color(0xFFFBCFE8), fontSize = 10.sp)
+        }
+      } else {
+        filteredItems.forEach { item ->
+          var isExpanded by remember { mutableStateOf(false) }
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFF831843),
+            border = BorderStroke(1.dp, Color(0xFFDB2777)),
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable { isExpanded = !isExpanded }
+          ) {
+            Column(modifier = Modifier.padding(8.dp)) {
+              Text(item.type, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+              Spacer(modifier = Modifier.height(3.dp))
+              Text("සාධාරණ පදය: ${item.generalTermFormula}", fontSize = 9.5.sp, fontFamily = FontFamily.Monospace, color = Color(0xFFFDE047))
+              Text("ඓක්‍යය සූත්‍රය: ${item.sumFormula}", fontSize = 9.5.sp, fontFamily = FontFamily.Monospace, color = Color(0xFF93C5FD))
+
+              if (isExpanded) {
+                Spacer(modifier = Modifier.height(4.dp))
+                item.properties.forEach { p -> Text("• $p", fontSize = 8.5.sp, color = Color(0xFFFCE7F3)) }
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF4C0519), modifier = Modifier.fillMaxWidth()) {
+                  Column(modifier = Modifier.padding(6.dp)) {
+                    Text("ආදර්ශ ගැටලුව: ${item.examProblem}", fontSize = 8.5.sp, color = Color(0xFFFDE68A))
+                    item.stepWorking.forEach { step -> Text("➔ $step", fontSize = 8.5.sp, color = Color.White) }
+                    Text("ප්‍රතිඵලය: ${item.finalResult}", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4ADE80))
+                  }
+                }
+              } else {
+                Text(
+                  text = "ශ්‍රේඪි ගුණාංග සහ ආදර්ශ ගැටලු විසඳුම බලන්න ▾",
+                  fontSize = 8.sp,
+                  color = Color(0xFFFBCFE8).copy(alpha = 0.8f)
+                )
               }
             }
           }
@@ -686,48 +1215,142 @@ fun MathProgressionsSubSection(
 @Composable
 fun MathVelocitySubSection(
   items: List<MathVelocityGraphItem>,
-  grade: String
+  grade: String,
+  onOpenFullscreen: () -> Unit = {}
 ) {
+  var searchQuery by remember { mutableStateOf("") }
+  val scrollState = rememberScrollState()
+  val coroutineScope = rememberCoroutineScope()
+
+  val filteredItems = remember(items, searchQuery) {
+    if (searchQuery.isBlank()) items
+    else items.filter {
+      it.title.contains(searchQuery, ignoreCase = true) ||
+      it.graphType.contains(searchQuery, ignoreCase = true) ||
+      it.problemStatement.contains(searchQuery, ignoreCase = true)
+    }
+  }
+
   Column(
     modifier = Modifier
       .fillMaxWidth()
-      .clip(RoundedCornerShape(8.dp))
+      .clip(RoundedCornerShape(10.dp))
       .background(Color(0xFF0F172A))
-      .padding(8.dp),
-    verticalArrangement = Arrangement.spacedBy(8.dp)
+      .padding(8.dp)
   ) {
-    Text(
-      text = "🚗 $grade ශ්‍රේණිය - ප්‍රවේග-කාල ප්‍රස්ථාර (Velocity-Time Graphs)",
-      fontSize = 11.5.sp,
-      fontWeight = FontWeight.Bold,
-      color = Color(0xFF38BDF8)
-    )
-
-    items.forEach { item ->
-      var isExpanded by remember { mutableStateOf(false) }
-      Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = Color(0xFF1E293B),
-        border = BorderStroke(1.dp, Color(0xFF0284C7)),
-        modifier = Modifier
-          .fillMaxWidth()
-          .clickable { isExpanded = !isExpanded }
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("🚗", fontSize = 13.sp)
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+          text = "$grade ශ්‍රේණිය - ප්‍රවේග-කාල ප්‍රස්ථාර (${filteredItems.size}/${items.size})",
+          fontSize = 11.5.sp,
+          fontWeight = FontWeight.Bold,
+          color = Color(0xFF38BDF8)
+        )
+      }
+      IconButton(
+        onClick = onOpenFullscreen,
+        modifier = Modifier.size(26.dp)
       ) {
-        Column(modifier = Modifier.padding(8.dp)) {
-          Text(item.title, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
-          Spacer(modifier = Modifier.height(2.dp))
-          Text(item.graphType, fontSize = 9.sp, color = Color(0xFFBAE6FD))
-          Spacer(modifier = Modifier.height(2.dp))
-          Text("සූත්‍ර: ${item.formulaUsed}", fontSize = 9.sp, color = Color(0xFFFDE047))
+        Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Color(0xFF38BDF8), modifier = Modifier.size(18.dp))
+      }
+    }
 
-          if (isExpanded) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF0F172A), modifier = Modifier.fillMaxWidth()) {
-              Column(modifier = Modifier.padding(6.dp)) {
-                Text("ගැටලුව: ${item.problemStatement}", fontSize = 8.5.sp, color = Color(0xFFFED7AA))
-                item.solutionSteps.forEach { s -> Text("• $s", fontSize = 8.5.sp, color = Color.White) }
-                Text("අවසාන පිළිතුරු: ${item.answersSummary}", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4ADE80))
+    Spacer(modifier = Modifier.height(4.dp))
+
+    // Scroll Control Bar
+    Surface(
+      shape = RoundedCornerShape(6.dp),
+      color = Color(0xFF1E293B),
+      modifier = Modifier.fillMaxWidth()
+    ) {
+      Row(
+        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text("↕️", fontSize = 10.sp)
+          Spacer(modifier = Modifier.width(4.dp))
+          Text(
+            text = "ඉහල පහල scroll කරන්න (${filteredItems.size}ක්)",
+            fontSize = 9.sp,
+            color = Color(0xFFBAE6FD)
+          )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+          Surface(
+            onClick = { coroutineScope.launch { scrollState.animateScrollTo(0) } },
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFF0284C7)
+          ) {
+            Text("⬆️ ඉහළට", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+          }
+          Surface(
+            onClick = { coroutineScope.launch { scrollState.animateScrollTo(scrollState.maxValue) } },
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFF0284C7)
+          ) {
+            Text("⬇️ පහළට", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+          }
+          Surface(
+            onClick = onOpenFullscreen,
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFF0369A1)
+          ) {
+            Text("⛶ විශාල කර", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+          }
+        }
+      }
+    }
+
+    Spacer(modifier = Modifier.height(6.dp))
+
+    // Internal Scrollable Container
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .heightIn(min = 260.dp, max = 500.dp)
+        .verticalScroll(scrollState),
+      verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+      filteredItems.forEach { item ->
+        var isExpanded by remember { mutableStateOf(false) }
+        Surface(
+          shape = RoundedCornerShape(8.dp),
+          color = Color(0xFF1E293B),
+          border = BorderStroke(1.dp, Color(0xFF0284C7)),
+          modifier = Modifier
+            .fillMaxWidth()
+            .clickable { isExpanded = !isExpanded }
+        ) {
+          Column(modifier = Modifier.padding(8.dp)) {
+            Text(item.title, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(item.graphType, fontSize = 9.sp, color = Color(0xFFBAE6FD))
+            Spacer(modifier = Modifier.height(2.dp))
+            Text("සූත්‍ර: ${item.formulaUsed}", fontSize = 9.sp, color = Color(0xFFFDE047))
+
+            if (isExpanded) {
+              Spacer(modifier = Modifier.height(4.dp))
+              Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF0F172A), modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(6.dp)) {
+                  Text("ගැටලුව: ${item.problemStatement}", fontSize = 8.5.sp, color = Color(0xFFFED7AA))
+                  item.solutionSteps.forEach { s -> Text("• $s", fontSize = 8.5.sp, color = Color.White) }
+                  Text("අවසාන පිළිතුරු: ${item.answersSummary}", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4ADE80))
+                }
               }
+            } else {
+              Text(
+                text = "ප්‍රස්ථාර ගැටලුව & පියවරෙන් පියවර විසඳුම බලන්න ▾",
+                fontSize = 8.sp,
+                color = Color(0xFF38BDF8).copy(alpha = 0.8f)
+              )
             }
           }
         }
@@ -738,46 +1361,134 @@ fun MathVelocitySubSection(
 
 @Composable
 fun MathExamSecretsSubSection(
-  items: List<MathExamSecretItem>
+  items: List<MathExamSecretItem>,
+  onOpenFullscreen: () -> Unit = {}
 ) {
+  var searchQuery by remember { mutableStateOf("") }
+  val scrollState = rememberScrollState()
+  val coroutineScope = rememberCoroutineScope()
+
+  val filteredItems = remember(items, searchQuery) {
+    if (searchQuery.isBlank()) items
+    else items.filter {
+      it.title.contains(searchQuery, ignoreCase = true) ||
+      it.category.contains(searchQuery, ignoreCase = true) ||
+      it.keyPoint.contains(searchQuery, ignoreCase = true)
+    }
+  }
+
   Column(
     modifier = Modifier
       .fillMaxWidth()
-      .clip(RoundedCornerShape(8.dp))
+      .clip(RoundedCornerShape(10.dp))
       .background(Color(0xFF422006))
-      .padding(8.dp),
-    verticalArrangement = Arrangement.spacedBy(8.dp)
+      .padding(8.dp)
   ) {
-    Text(
-      text = "💡 O/L Marking Scheme රහස් සහ නිතරම වරදින තැන් 20 (Exam Hacks)",
-      fontSize = 11.5.sp,
-      fontWeight = FontWeight.Bold,
-      color = Color(0xFFFEF08A)
-    )
-
-    items.forEach { item ->
-      Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = Color(0xFF713F12),
-        border = BorderStroke(1.dp, Color(0xFFEAB308)),
-        modifier = Modifier.fillMaxWidth()
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("💡", fontSize = 13.sp)
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+          text = "O/L Marking Scheme රහස් & වැරදි 20 (${filteredItems.size}/${items.size})",
+          fontSize = 11.5.sp,
+          fontWeight = FontWeight.Bold,
+          color = Color(0xFFFEF08A)
+        )
+      }
+      IconButton(
+        onClick = onOpenFullscreen,
+        modifier = Modifier.size(26.dp)
       ) {
-        Column(modifier = Modifier.padding(8.dp)) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Color(0xFFFEF08A), modifier = Modifier.size(18.dp))
+      }
+    }
+
+    Spacer(modifier = Modifier.height(4.dp))
+
+    // Scroll Control Bar
+    Surface(
+      shape = RoundedCornerShape(6.dp),
+      color = Color(0xFF713F12),
+      modifier = Modifier.fillMaxWidth()
+    ) {
+      Row(
+        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text("↕️", fontSize = 10.sp)
+          Spacer(modifier = Modifier.width(4.dp))
+          Text(
+            text = "ඉහල පහල scroll කරන්න (${filteredItems.size}ක්)",
+            fontSize = 9.sp,
+            color = Color(0xFFFEF9C3)
+          )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+          Surface(
+            onClick = { coroutineScope.launch { scrollState.animateScrollTo(0) } },
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFFCA8A04)
           ) {
-            Text(item.title, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFCA8A04)) {
-              Text(item.category, fontSize = 7.5.sp, color = Color.White, modifier = Modifier.padding(4.dp, 1.dp))
-            }
+            Text("⬆️ ඉහළට", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
           }
-          Spacer(modifier = Modifier.height(3.dp))
-          Text(item.keyPoint, fontSize = 9.sp, color = Color(0xFFFEF9C3))
-          Spacer(modifier = Modifier.height(2.dp))
-          Text("උපදෙස: ${item.practicalAdvice}", fontSize = 8.5.sp, color = Color(0xFF86EFAC))
-          Text("උදාහරණය: ${item.exampleCase}", fontSize = 8.5.sp, color = Color(0xFF93C5FD))
+          Surface(
+            onClick = { coroutineScope.launch { scrollState.animateScrollTo(scrollState.maxValue) } },
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFFCA8A04)
+          ) {
+            Text("⬇️ පහළට", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+          }
+          Surface(
+            onClick = onOpenFullscreen,
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFFA16207)
+          ) {
+            Text("⛶ විශාල කර", fontSize = 8.sp, color = Color.White, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+          }
+        }
+      }
+    }
+
+    Spacer(modifier = Modifier.height(6.dp))
+
+    // Internal Scrollable Container
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .heightIn(min = 260.dp, max = 500.dp)
+        .verticalScroll(scrollState),
+      verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+      filteredItems.forEach { item ->
+        Surface(
+          shape = RoundedCornerShape(8.dp),
+          color = Color(0xFF713F12),
+          border = BorderStroke(1.dp, Color(0xFFEAB308)),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Column(modifier = Modifier.padding(8.dp)) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(item.title, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+              Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFCA8A04)) {
+                Text(item.category, fontSize = 7.5.sp, color = Color.White, modifier = Modifier.padding(4.dp, 1.dp))
+              }
+            }
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(item.keyPoint, fontSize = 9.sp, color = Color(0xFFFEF9C3))
+            Spacer(modifier = Modifier.height(2.dp))
+            Text("උපදෙස: ${item.practicalAdvice}", fontSize = 8.5.sp, color = Color(0xFF86EFAC))
+            Text("උදාහරණය: ${item.exampleCase}", fontSize = 8.5.sp, color = Color(0xFF93C5FD))
+          }
         }
       }
     }

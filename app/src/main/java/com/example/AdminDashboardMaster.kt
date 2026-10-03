@@ -29,6 +29,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Check
@@ -300,7 +301,7 @@ fun AdminDashboardMasterDialog(
             modifier = Modifier
               .fillMaxWidth()
               .background(Color(0xFFF8FAFC))
-              .padding(horizontal = 12.dp, vertical = 10.dp),
+              .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
           ) {
             AdminKpiCard(
@@ -308,6 +309,10 @@ fun AdminDashboardMasterDialog(
               count = "$totalUsers",
               bgColor = Color(0xFFEFF6FF),
               textColor = Color(0xFF1D4ED8),
+              onClick = {
+                selectedTab = 0
+                userFilterStatus = "ALL"
+              },
               modifier = Modifier.weight(1f)
             )
             AdminKpiCard(
@@ -315,6 +320,10 @@ fun AdminDashboardMasterDialog(
               count = "$pendingUsers",
               bgColor = Color(0xFFFEF2F2),
               textColor = Color(0xFFDC2626),
+              onClick = {
+                selectedTab = 0
+                userFilterStatus = "PENDING"
+              },
               modifier = Modifier.weight(1f)
             )
             AdminKpiCard(
@@ -322,6 +331,10 @@ fun AdminDashboardMasterDialog(
               count = "$approvedUsers",
               bgColor = Color(0xFFECFDF5),
               textColor = Color(0xFF059669),
+              onClick = {
+                selectedTab = 0
+                userFilterStatus = "APPROVED"
+              },
               modifier = Modifier.weight(1f)
             )
             AdminKpiCard(
@@ -329,6 +342,10 @@ fun AdminDashboardMasterDialog(
               count = "$expiredUsers",
               bgColor = Color(0xFFFFF1F2),
               textColor = Color(0xFFBE123C),
+              onClick = {
+                selectedTab = 0
+                userFilterStatus = "EXPIRED"
+              },
               modifier = Modifier.weight(1f)
             )
           }
@@ -436,26 +453,29 @@ private fun AdminKpiCard(
   count: String,
   bgColor: Color,
   textColor: Color,
+  onClick: (() -> Unit)? = null,
   modifier: Modifier = Modifier
 ) {
   Surface(
     shape = RoundedCornerShape(10.dp),
     color = bgColor,
+    onClick = { onClick?.invoke() },
+    enabled = onClick != null,
     modifier = modifier
   ) {
     Column(
-      modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
+      modifier = Modifier.padding(vertical = 7.dp, horizontal = 4.dp),
       horizontalAlignment = Alignment.CenterHorizontally
     ) {
       Text(
         text = count,
-        fontSize = 16.sp,
+        fontSize = 15.sp,
         fontWeight = FontWeight.ExtraBold,
         color = textColor
       )
       Text(
         text = title,
-        fontSize = 9.sp,
+        fontSize = 8.5.sp,
         fontWeight = FontWeight.Medium,
         color = textColor.copy(alpha = 0.85f),
         maxLines = 1,
@@ -480,235 +500,297 @@ private fun UserManagementSection(
 ) {
   val context = LocalContext.current
 
-  Column(modifier = Modifier.fillMaxSize()) {
-    // Search Bar
-    OutlinedTextField(
-      value = searchQuery,
-      onValueChange = onSearchQueryChange,
-      label = { Text("නම, දුරකථන අංකය හෝ Email සොයන්න...") },
-      leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Color(0xFF64748B)) },
-      trailingIcon = {
-        if (searchQuery.isNotEmpty()) {
-          IconButton(onClick = { onSearchQueryChange("") }) {
-            Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color(0xFF64748B))
-          }
-        }
-      },
-      singleLine = true,
-      shape = RoundedCornerShape(12.dp),
-      modifier = Modifier
-        .fillMaxWidth()
-        .height(54.dp)
-        .testTag("admin_user_search_field")
+  val pCount = remember(registeredUsers.size, registeredUsers.map { it.isApproved }) {
+    registeredUsers.count { !it.isApproved && !isAuthorizedAdminUser(it.usernameOrPhone) }
+  }
+
+  // Filtered and Priority-Sorted list (Pending Requests ALWAYS at the very top!)
+  val filteredList = remember(registeredUsers.size, registeredUsers.map { it.isApproved to it.paymentStatus }, searchQuery, filterStatus) {
+    registeredUsers.filter { user ->
+      val matchesSearch = searchQuery.isBlank() ||
+        user.fullName.contains(searchQuery, ignoreCase = true) ||
+        user.usernameOrPhone.contains(searchQuery, ignoreCase = true) ||
+        user.requestedGradePackage.contains(searchQuery, ignoreCase = true)
+
+      val matchesFilter = when (filterStatus) {
+        "PENDING" -> !user.isApproved && !isAuthorizedAdminUser(user.usernameOrPhone)
+        "APPROVED" -> user.isApproved && !user.isApprovalExpired() && !isAuthorizedAdminUser(user.usernameOrPhone)
+        "EXPIRED" -> user.isApprovalExpired() && !isAuthorizedAdminUser(user.usernameOrPhone)
+        else -> true
+      }
+
+      matchesSearch && matchesFilter
+    }.sortedWith(
+      compareBy(
+        // Priority 0: Pending approval normal students (ALWAYS at the TOP of screen!)
+        { user ->
+          if (!user.isApproved && !isAuthorizedAdminUser(user.usernameOrPhone)) 0
+          else if (user.isApprovalExpired() && !isAuthorizedAdminUser(user.usernameOrPhone)) 1
+          else if (user.isApproved && !isAuthorizedAdminUser(user.usernameOrPhone)) 2
+          else 3 // Admins placed at bottom of student list
+        },
+        // Priority 1: Within each group, newest request timestamp first
+        { user -> -(user.requestTimestamp ?: 0L) }
+      )
     )
+  }
 
-    Spacer(modifier = Modifier.height(8.dp))
-
-    // Filter Chips
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-      FilterChip(
-        selected = filterStatus == "ALL",
-        onClick = { onFilterStatusChange("ALL") },
-        label = { Text("සියල්ල (${registeredUsers.size})", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
-        colors = FilterChipDefaults.filterChipColors(
-          selectedContainerColor = Color(0xFF1E3A8A),
-          selectedLabelColor = Color.White
-        )
-      )
-      FilterChip(
-        selected = filterStatus == "PENDING",
-        onClick = { onFilterStatusChange("PENDING") },
-        label = {
-          val pCount = registeredUsers.count { !it.isApproved && !isAuthorizedAdminUser(it.usernameOrPhone) }
-          Text("⏳ අනුමැතියට ($pCount)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+  LazyColumn(
+    modifier = Modifier.fillMaxSize(),
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+    contentPadding = PaddingValues(bottom = 24.dp)
+  ) {
+    // 1. Search Bar item (Fully scrollable)
+    item(key = "admin_search_bar") {
+      OutlinedTextField(
+        value = searchQuery,
+        onValueChange = onSearchQueryChange,
+        label = { Text("නම, දුරකථන අංකය හෝ Email සොයන්න...") },
+        leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Color(0xFF64748B)) },
+        trailingIcon = {
+          if (searchQuery.isNotEmpty()) {
+            IconButton(onClick = { onSearchQueryChange("") }) {
+              Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color(0xFF64748B))
+            }
+          }
         },
-        colors = FilterChipDefaults.filterChipColors(
-          selectedContainerColor = Color(0xFFDC2626),
-          selectedLabelColor = Color.White
-        )
-      )
-      FilterChip(
-        selected = filterStatus == "APPROVED",
-        onClick = { onFilterStatusChange("APPROVED") },
-        label = {
-          val aCount = registeredUsers.count { it.isApproved && !it.isApprovalExpired() && !isAuthorizedAdminUser(it.usernameOrPhone) }
-          Text("✅ සක්‍රීය (මාස 6) ($aCount)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-        },
-        colors = FilterChipDefaults.filterChipColors(
-          selectedContainerColor = Color(0xFF059669),
-          selectedLabelColor = Color.White
-        )
-      )
-      FilterChip(
-        selected = filterStatus == "EXPIRED",
-        onClick = { onFilterStatusChange("EXPIRED") },
-        label = {
-          val expCount = registeredUsers.count { it.isApprovalExpired() && !isAuthorizedAdminUser(it.usernameOrPhone) }
-          Text("⚠️ මාස 6 අවසන් ($expCount)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-        },
-        colors = FilterChipDefaults.filterChipColors(
-          selectedContainerColor = Color(0xFFB91C1C),
-          selectedLabelColor = Color.White
-        )
+        singleLine = true,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(54.dp)
+          .testTag("admin_user_search_field")
       )
     }
 
-    Spacer(modifier = Modifier.height(10.dp))
-
-    // Dedicated Banner when EXPIRED filter is selected
-    if (filterStatus == "EXPIRED") {
-      Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = Color(0xFFFFF1F2),
-        border = BorderStroke(1.5.dp, Color(0xFFFDA4AF)),
-        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+    // 2. Filter Chips item (Horizontally Scrollable inside vertical scroll)
+    item(key = "admin_filter_chips") {
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
       ) {
-        Row(
-          modifier = Modifier.padding(10.dp),
-          verticalAlignment = Alignment.CenterVertically
+        FilterChip(
+          selected = filterStatus == "ALL",
+          onClick = { onFilterStatusChange("ALL") },
+          label = { Text("සියල්ල (${registeredUsers.size})", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+          colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = Color(0xFF1E3A8A),
+            selectedLabelColor = Color.White
+          )
+        )
+        FilterChip(
+          selected = filterStatus == "PENDING",
+          onClick = { onFilterStatusChange("PENDING") },
+          label = {
+            Text("⏳ අනුමැතියට ($pCount)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+          },
+          colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = Color(0xFFDC2626),
+            selectedLabelColor = Color.White
+          )
+        )
+        FilterChip(
+          selected = filterStatus == "APPROVED",
+          onClick = { onFilterStatusChange("APPROVED") },
+          label = {
+            val aCount = registeredUsers.count { it.isApproved && !it.isApprovalExpired() && !isAuthorizedAdminUser(it.usernameOrPhone) }
+            Text("✅ සක්‍රීය (මාස 6) ($aCount)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+          },
+          colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = Color(0xFF059669),
+            selectedLabelColor = Color.White
+          )
+        )
+        FilterChip(
+          selected = filterStatus == "EXPIRED",
+          onClick = { onFilterStatusChange("EXPIRED") },
+          label = {
+            val expCount = registeredUsers.count { it.isApprovalExpired() && !isAuthorizedAdminUser(it.usernameOrPhone) }
+            Text("⚠️ මාස 6 අවසන් ($expCount)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+          },
+          colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = Color(0xFFB91C1C),
+            selectedLabelColor = Color.White
+          )
+        )
+      }
+    }
+
+    // 3. Prominent Alert Banner when Pending Requests Exist and not on PENDING tab
+    if (pCount > 0 && filterStatus != "PENDING") {
+      item(key = "admin_pending_alert") {
+        Surface(
+          onClick = { onFilterStatusChange("PENDING") },
+          shape = RoundedCornerShape(10.dp),
+          color = Color(0xFFFEF2F2),
+          border = BorderStroke(1.5.dp, Color(0xFFEF4444)),
+          modifier = Modifier.fillMaxWidth()
         ) {
-          Icon(Icons.Default.Warning, contentDescription = "Expired", tint = Color(0xFFE11D48), modifier = Modifier.size(24.dp))
-          Spacer(modifier = Modifier.width(8.dp))
-          Column {
-            Text(
-              text = "⚠️ මාස 6 සම්පූර්ණ වූ සිසුන්ගේ වෙනම ලැයිස්තුව (Expired Students)",
-              fontSize = 11.sp,
-              fontWeight = FontWeight.Bold,
-              color = Color(0xFF9F1239)
-            )
-            Text(
-              text = "මෙම සිසුන්ගේ මාස 6ක (දින 180) කාලය සම්පූර්ණ වී ඇති බැවින් ඇප් එකට ලොග් වීම ස්වයංක්‍රීයව අත්හිටුවා ඇත. රු. 1000 ගෙවීමෙන් පසු 'මාස 6ක් අලුත් කරන්න' බොත්තම ඔබා නැවත සක්‍රීය කරන්න.",
-              fontSize = 9.5.sp,
-              color = Color(0xFFBE123C)
-            )
+          Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Icon(Icons.Default.Warning, contentDescription = "Pending Alert", tint = Color(0xFFDC2626), modifier = Modifier.size(18.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text(
+                text = "🚨 නව අනුමැති ඉල්ලීම් $pCount ක් ඇත! (Click to View)",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF991B1B)
+              )
+            }
+            Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = Color(0xFFDC2626)
+            ) {
+              Text(
+                text = "පරීක්ෂා කරන්න ❯",
+                fontSize = 9.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              )
+            }
           }
         }
       }
     }
 
-    // Filtered list
-    val filteredList = remember(registeredUsers.size, searchQuery, filterStatus) {
-      registeredUsers.filter { user ->
-        val matchesSearch = searchQuery.isBlank() ||
-          user.fullName.contains(searchQuery, ignoreCase = true) ||
-          user.usernameOrPhone.contains(searchQuery, ignoreCase = true) ||
-          user.requestedGradePackage.contains(searchQuery, ignoreCase = true)
-
-        val matchesFilter = when (filterStatus) {
-          "PENDING" -> !user.isApproved && !isAuthorizedAdminUser(user.usernameOrPhone)
-          "APPROVED" -> user.isApproved && !user.isApprovalExpired() && !isAuthorizedAdminUser(user.usernameOrPhone)
-          "EXPIRED" -> user.isApprovalExpired() && !isAuthorizedAdminUser(user.usernameOrPhone)
-          else -> true
+    // 4. Dedicated Banner when EXPIRED filter is selected
+    if (filterStatus == "EXPIRED") {
+      item(key = "admin_expired_alert") {
+        Surface(
+          shape = RoundedCornerShape(12.dp),
+          color = Color(0xFFFFF1F2),
+          border = BorderStroke(1.5.dp, Color(0xFFFDA4AF)),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Row(
+            modifier = Modifier.padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(Icons.Default.Warning, contentDescription = "Expired", tint = Color(0xFFE11D48), modifier = Modifier.size(24.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Column {
+              Text(
+                text = "⚠️ මාස 6 සම්පූර්ණ වූ සිසුන්ගේ වෙනම ලැයිස්තුව (Expired Students)",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF9F1239)
+              )
+              Text(
+                text = "මෙම සිසුන්ගේ මාස 6ක (දින 180) කාලය සම්පූර්ණ වී ඇති බැවින් ඇප් එකට ලොග් වීම ස්වයංක්‍රීයව අත්හිටුවා ඇත. රු. 1000 ගෙවීමෙන් පසු 'මාස 6ක් අලුත් කරන්න' බොත්තම ඔබා නැවත සක්‍රීය කරන්න.",
+                fontSize = 9.5.sp,
+                color = Color(0xFFBE123C)
+              )
+            }
+          }
         }
-
-        matchesSearch && matchesFilter
       }
     }
 
+    // 5. User List Cards or Empty View
     if (filteredList.isEmpty()) {
-      Box(
-        modifier = Modifier
-          .fillMaxSize()
-          .padding(top = 40.dp),
-        contentAlignment = Alignment.Center
-      ) {
-        Text(
-          text = "පරිශීලකයින් කිසිවෙකු හමු නොවීය.",
-          fontSize = 13.sp,
-          color = Color(0xFF64748B)
-        )
-      }
-    } else {
-      LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(bottom = 20.dp)
-      ) {
-        items(filteredList, key = { it.id + it.usernameOrPhone }) { user ->
-          AdminUserItemCard(
-            user = user,
-            onApprove = {
-              val idx = registeredUsers.indexOf(user)
-              if (idx != -1) {
-                val gradesToAssign = getApprovedGradesForPackage(user.requestedGradePackage)
-                registeredUsers[idx] = user.copy(
-                  isApproved = true,
-                  paymentStatus = "Approved",
-                  approvedGrades = gradesToAssign,
-                  approvalTimestamp = System.currentTimeMillis()
-                )
-                onUsersUpdated()
-                Toast.makeText(context, "${user.fullName} හට මාස 6කට (දින 180) සාර්ථකව අනුමත කරන ලදී!", Toast.LENGTH_SHORT).show()
-              }
-            },
-            onRevoke = {
-              val idx = registeredUsers.indexOf(user)
-              if (idx != -1) {
-                registeredUsers[idx] = user.copy(isApproved = false, paymentStatus = "Revoked")
-                onUsersUpdated()
-                Toast.makeText(context, "${user.fullName} අනුමැතිය අවලංගු කරන ලදී.", Toast.LENGTH_SHORT).show()
-              }
-            },
-            onResetDeviceLock = {
-              val idx = registeredUsers.indexOf(user)
-              if (idx != -1) {
-                registeredUsers[idx] = user.copy(boundDeviceId = null, boundDeviceName = null, boundDate = null)
-                onUsersUpdated()
-                Toast.makeText(context, "📱 ${user.fullName} ගේ Device Lock එක ඉවත් කරන ලදී!", Toast.LENGTH_SHORT).show()
-              }
-            },
-            onToggleGrade = { gradeNum ->
-              val idx = registeredUsers.indexOf(user)
-              if (idx != -1) {
-                val current = user.approvedGrades.toMutableList()
-                if (current.contains(gradeNum)) {
-                  current.remove(gradeNum)
-                } else {
-                  current.add(gradeNum)
-                }
-                registeredUsers[idx] = user.copy(approvedGrades = current)
-                onUsersUpdated()
-              }
-            },
-            onGrantOlCombo = {
-              val idx = registeredUsers.indexOf(user)
-              if (idx != -1) {
-                registeredUsers[idx] = user.copy(
-                  approvedGrades = listOf("10", "11", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"),
-                  isApproved = true,
-                  paymentStatus = "Approved",
-                  approvalTimestamp = System.currentTimeMillis()
-                )
-                onUsersUpdated()
-                Toast.makeText(context, "${user.fullName} හට 10+11 O/L ප්‍රවේශය (මාස 6 / දින 180) ලබාදුනි!", Toast.LENGTH_SHORT).show()
-              }
-            },
-            onGrantAllGrades = {
-              val idx = registeredUsers.indexOf(user)
-              if (idx != -1) {
-                registeredUsers[idx] = user.copy(
-                  approvedGrades = listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"),
-                  isApproved = true,
-                  paymentStatus = "Approved",
-                  approvalTimestamp = System.currentTimeMillis()
-                )
-                onUsersUpdated()
-                Toast.makeText(context, "${user.fullName} හට සියලු ශ්‍රේණි (06-11) ප්‍රවේශය (මාස 6 / දින 180) ලබාදුනි!", Toast.LENGTH_SHORT).show()
-              }
-            },
-            onDelete = {
-              registeredUsers.remove(user)
-              onUsersUpdated()
-              Toast.makeText(context, "${user.fullName} ගිණුම මකා දමන ලදී.", Toast.LENGTH_SHORT).show()
-            },
-            onPreviewReceipt = { uri ->
-              onPreviewReceipt(uri)
-            }
+      item(key = "admin_empty_state") {
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 40.dp),
+          contentAlignment = Alignment.Center
+        ) {
+          Text(
+            text = "පරිශීලකයින් කිසිවෙකු හමු නොවීය.",
+            fontSize = 13.sp,
+            color = Color(0xFF64748B)
           )
         }
+      }
+    } else {
+      items(filteredList, key = { it.id + it.usernameOrPhone }) { user ->
+        AdminUserItemCard(
+          user = user,
+          onApprove = {
+            val idx = registeredUsers.indexOf(user)
+            if (idx != -1) {
+              val gradesToAssign = getApprovedGradesForPackage(user.requestedGradePackage)
+              registeredUsers[idx] = user.copy(
+                isApproved = true,
+                paymentStatus = "Approved",
+                approvedGrades = gradesToAssign,
+                approvalTimestamp = System.currentTimeMillis()
+              )
+              onUsersUpdated()
+              Toast.makeText(context, "${user.fullName} හට මාස 6කට (දින 180) සාර්ථකව අනුමත කරන ලදී!", Toast.LENGTH_SHORT).show()
+            }
+          },
+          onRevoke = {
+            val idx = registeredUsers.indexOf(user)
+            if (idx != -1) {
+              registeredUsers[idx] = user.copy(isApproved = false, paymentStatus = "Revoked")
+              onUsersUpdated()
+              Toast.makeText(context, "${user.fullName} අනුමැතිය අවලංගු කරන ලදී.", Toast.LENGTH_SHORT).show()
+            }
+          },
+          onResetDeviceLock = {
+            val idx = registeredUsers.indexOf(user)
+            if (idx != -1) {
+              registeredUsers[idx] = user.copy(boundDeviceId = null, boundDeviceName = null, boundDate = null)
+              onUsersUpdated()
+              Toast.makeText(context, "📱 ${user.fullName} ගේ Device Lock එක ඉවත් කරන ලදී!", Toast.LENGTH_SHORT).show()
+            }
+          },
+          onToggleGrade = { gradeNum ->
+            val idx = registeredUsers.indexOf(user)
+            if (idx != -1) {
+              val current = user.approvedGrades.toMutableList()
+              if (current.contains(gradeNum)) {
+                current.remove(gradeNum)
+              } else {
+                current.add(gradeNum)
+              }
+              registeredUsers[idx] = user.copy(approvedGrades = current)
+              onUsersUpdated()
+            }
+          },
+          onGrantOlCombo = {
+            val idx = registeredUsers.indexOf(user)
+            if (idx != -1) {
+              registeredUsers[idx] = user.copy(
+                approvedGrades = listOf("10", "11", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"),
+                isApproved = true,
+                paymentStatus = "Approved",
+                approvalTimestamp = System.currentTimeMillis()
+              )
+              onUsersUpdated()
+              Toast.makeText(context, "${user.fullName} හට 10+11 O/L ප්‍රවේශය (මාස 6 / දින 180) ලබාදුනි!", Toast.LENGTH_SHORT).show()
+            }
+          },
+          onGrantAllGrades = {
+            val idx = registeredUsers.indexOf(user)
+            if (idx != -1) {
+              registeredUsers[idx] = user.copy(
+                approvedGrades = listOf("06", "07", "08", "09", "10", "11", "6 ශ්‍රේණිය", "7 ශ්‍රේණිය", "8 ශ්‍රේණිය", "9 ශ්‍රේණිය", "10 ශ්‍රේණිය", "11 ශ්‍රේණිය"),
+                isApproved = true,
+                paymentStatus = "Approved",
+                approvalTimestamp = System.currentTimeMillis()
+              )
+              onUsersUpdated()
+              Toast.makeText(context, "${user.fullName} හට සියලු ශ්‍රේණි (06-11) ප්‍රවේශය (මාස 6 / දින 180) ලබාදුනි!", Toast.LENGTH_SHORT).show()
+            }
+          },
+          onDelete = {
+            registeredUsers.remove(user)
+            onUsersUpdated()
+            Toast.makeText(context, "${user.fullName} ගිණුම මකා දමන ලදී.", Toast.LENGTH_SHORT).show()
+          },
+          onPreviewReceipt = { uri ->
+            onPreviewReceipt(uri)
+          }
+        )
       }
     }
   }
@@ -821,11 +903,11 @@ private fun AdminUserItemCard(
 
         // WhatsApp Direct Link Button for Student Contact
         if (!isAdminAccount && user.usernameOrPhone.isNotBlank()) {
-          IconButton(
+          Surface(
             onClick = {
               val cleanNumber = user.usernameOrPhone.replace("+", "").replace(" ", "").trim()
               val targetPhone = if (cleanNumber.startsWith("0")) "94" + cleanNumber.substring(1) else cleanNumber
-              val wpUri = Uri.parse("https://wa.me/$targetPhone?text=Hello%20${user.fullName},%20Greetings%20from%20O/L%20Study%20Portal%20Admin!")
+              val wpUri = Uri.parse("https://wa.me/$targetPhone?text=ආයුබෝවන්%20${user.fullName},%20O/L%20Study%20Portal%20ඇප්%20එකේ%20ඔබගේ%20අනුමැති%20ඉල්ලීම%20සම්බන්ධවයි!")
               val intent = Intent(Intent.ACTION_VIEW, wpUri)
               try {
                 context.startActivity(intent)
@@ -833,9 +915,18 @@ private fun AdminUserItemCard(
                 Toast.makeText(context, "WhatsApp සොයාගත නොහැකි විය.", Toast.LENGTH_SHORT).show()
               }
             },
-            modifier = Modifier.size(28.dp)
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFFDCFCE7),
+            border = BorderStroke(1.dp, Color(0xFF86EFAC))
           ) {
-            Icon(Icons.Default.Phone, contentDescription = "WhatsApp Student", tint = Color(0xFF16A34A), modifier = Modifier.size(16.dp))
+            Row(
+              modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Icon(Icons.Default.Phone, contentDescription = "WhatsApp Student", tint = Color(0xFF16A34A), modifier = Modifier.size(13.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("WhatsApp", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D))
+            }
           }
         }
       }

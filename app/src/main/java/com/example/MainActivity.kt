@@ -2823,17 +2823,21 @@ fun StudentPortalApp() {
                 requestedGradePackage = requestedPackage,
                 slipImageUri = receiptUri?.toString() ?: existing.slipImageUri,
                 paymentStatus = status,
+                isApproved = false,
                 boundDeviceId = existing.boundDeviceId ?: devId,
                 boundDeviceName = existing.boundDeviceName ?: devName,
                 requestDate = nowFormatted,
                 requestTimestamp = now
               )
-              registeredUsers[idx] = updated
+              if (idx >= 0) {
+                registeredUsers.removeAt(idx)
+              }
+              registeredUsers.add(0, updated)
               if (loggedInUser?.id == existing.id || loggedInUser?.usernameOrPhone == existing.usernameOrPhone) {
                 loggedInUser = updated
               }
             } else {
-              val newId = (registeredUsers.size + 1).toString()
+              val newId = System.currentTimeMillis().toString()
               val newUser = UserAccount(
                 id = newId,
                 fullName = name,
@@ -2845,11 +2849,11 @@ fun StudentPortalApp() {
                 paymentStatus = status,
                 boundDeviceId = devId,
                 boundDeviceName = devName,
-                boundDate = "2026-08-20",
+                boundDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(now)),
                 requestDate = nowFormatted,
                 requestTimestamp = now
               )
-              registeredUsers.add(newUser)
+              registeredUsers.add(0, newUser)
               loggedInUser = newUser
             }
             saveUsersToPreferences(context, registeredUsers.toList())
@@ -3199,7 +3203,6 @@ fun StudentPortalApp() {
           onDismissRequest = { showIframePdfModal = false },
           properties = DialogProperties(
             usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false,
             securePolicy = SecureFlagPolicy.SecureOff
           )
         ) {
@@ -3213,279 +3216,242 @@ fun StudentPortalApp() {
             }
           ) {
             Column(modifier = Modifier.fillMaxSize()) {
-              // Minimal, sleek Top Navigation Bar (Hidden in Full Screen Mode)
+              // Ultra-Compact Minimal Top Navigation Bar (Hidden in Full Screen Mode)
               AnimatedVisibility(visible = !isFullScreenReadingMode) {
                 Surface(
                   color = when (activeEyeCareMode) {
-                    EyeCareThemeMode.LIGHT -> Color(0xFF1E293B)
+                    EyeCareThemeMode.LIGHT -> Color(0xFF0F172A)
                     EyeCareThemeMode.SEPIA -> Color(0xFF451A03)
                     EyeCareThemeMode.DARK -> Color(0xFF020617)
                     EyeCareThemeMode.BLUE_LIGHT_SHIELD -> Color(0xFF0B132B)
                   },
                   modifier = Modifier.fillMaxWidth()
                 ) {
-                  Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                      modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                      verticalAlignment = Alignment.CenterVertically
-                    ) {
+                  Row(
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .padding(horizontal = 6.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    // Back button
                     IconButton(
                       onClick = { showIframePdfModal = false },
-                      modifier = Modifier.size(38.dp)
+                      modifier = Modifier.size(32.dp)
                     ) {
                       Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Go Back",
                         tint = Color.White,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(18.dp)
                       )
                     }
 
-                    Spacer(modifier = Modifier.width(4.dp))
-
+                    // PDF Icon
                     Icon(
                       imageVector = Icons.Default.PictureAsPdf,
                       contentDescription = null,
                       tint = Color(0xFFFF5252),
-                      modifier = Modifier.size(18.dp)
+                      modifier = Modifier.size(15.dp)
                     )
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
 
+                    // Compact Title
                     Text(
-                      text = iframeModalPdfTitle,
+                      text = iframeModalPdfTitle.ifBlank { "PDF සටහන්" },
                       fontWeight = FontWeight.Bold,
-                      fontSize = 12.sp,
+                      fontSize = 11.sp,
                       color = Color.White,
                       maxLines = 1,
                       overflow = TextOverflow.Ellipsis,
-                      modifier = Modifier.weight(1f)
+                      modifier = Modifier.weight(1f, fill = false).padding(horizontal = 4.dp)
                     )
 
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    // Eye-Care Theme Quick Switcher in Top Bar
-                    Surface(
-                      onClick = { showEyeCareSettingsSheet = true },
-                      shape = RoundedCornerShape(8.dp),
-                      color = when (activeEyeCareMode) {
-                        EyeCareThemeMode.LIGHT -> Color(0xFF334155)
-                        EyeCareThemeMode.SEPIA -> Color(0xFF78350F)
-                        EyeCareThemeMode.DARK -> Color(0xFF1E293B)
-                        EyeCareThemeMode.BLUE_LIGHT_SHIELD -> Color(0xFF1C2541)
-                      },
-                      border = BorderStroke(1.dp, Color(0xFF38BDF8)),
-                      modifier = Modifier.padding(end = 4.dp).testTag("pdf_eyecare_top_btn")
+                    // Horizontally scrollable tool chips - never wraps, never stretches height
+                    LazyRow(
+                      horizontalArrangement = Arrangement.spacedBy(4.dp),
+                      verticalAlignment = Alignment.CenterVertically,
+                      modifier = Modifier.weight(1f)
                     ) {
-                      Row(
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                      ) {
-                        Text(activeEyeCareMode.iconEmoji, fontSize = 12.sp)
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                          text = when (activeEyeCareMode) {
-                            EyeCareThemeMode.LIGHT -> "දිවා"
-                            EyeCareThemeMode.SEPIA -> "සේපියා"
-                            EyeCareThemeMode.DARK -> "රාත්‍රී"
-                            EyeCareThemeMode.BLUE_LIGHT_SHIELD -> "Shield"
+                      // 1. FULLSCREEN PROMINENT BUTTON
+                      item {
+                        Surface(
+                          onClick = { isFullScreenReadingMode = true },
+                          shape = RoundedCornerShape(6.dp),
+                          color = Color(0xFF0284C7),
+                          modifier = Modifier.testTag("pdf_fullscreen_btn")
+                        ) {
+                          Row(
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                          ) {
+                            Text("⛶", fontSize = 11.sp, color = Color.White)
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                              text = "ෆුල් ස්ක්‍රීන්",
+                              color = Color.White,
+                              fontSize = 9.5.sp,
+                              fontWeight = FontWeight.Bold
+                            )
+                          }
+                        }
+                      }
+
+                      // 2. Eye-Care Theme Quick Switcher
+                      item {
+                        Surface(
+                          onClick = {
+                            val nextMode = when (activeEyeCareMode) {
+                              EyeCareThemeMode.LIGHT -> EyeCareThemeMode.DARK
+                              EyeCareThemeMode.DARK -> EyeCareThemeMode.SEPIA
+                              EyeCareThemeMode.SEPIA -> EyeCareThemeMode.BLUE_LIGHT_SHIELD
+                              EyeCareThemeMode.BLUE_LIGHT_SHIELD -> EyeCareThemeMode.LIGHT
+                            }
+                            activeEyeCareMode = nextMode
+                            saveEyeCareTheme(context, nextMode)
                           },
-                          color = Color(0xFF38BDF8),
-                          fontSize = 10.sp,
-                          fontWeight = FontWeight.Bold
-                        )
-                      }
-                    }
-
-                    // Dedicated non-obstructive action button for Quiz in the top navigation bar
-                    Surface(
-                      onClick = { showPdfQuizBottomSheet = true },
-                      shape = RoundedCornerShape(8.dp),
-                      color = Color(0xFF4F46E5),
-                      modifier = Modifier.padding(end = 4.dp)
-                    ) {
-                      Row(
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                      ) {
-                        Text("🧠", fontSize = 11.sp)
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Text(
-                          text = "ක්විස්",
-                          color = Color.White,
-                          fontSize = 10.sp,
-                          fontWeight = FontWeight.Bold
-                        )
-                      }
-                    }
-
-                    // Dedicated non-obstructive action button for Flashcards in the top navigation bar
-                    Surface(
-                      onClick = { showFlashcardsDialog = true },
-                      shape = RoundedCornerShape(8.dp),
-                      color = Color(0xFF16A34A),
-                      modifier = Modifier.padding(end = 4.dp)
-                    ) {
-                      Row(
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                      ) {
-                        Text("💡", fontSize = 11.sp)
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Text(
-                          text = "කාඩ්",
-                          color = Color.White,
-                          fontSize = 10.sp,
-                          fontWeight = FontWeight.Bold
-                        )
-                      }
-                    }
-
-                    // Dedicated Subject-specific Auto-Check action button in PDF top bar
-                    if (iframeModalPdfTitle.contains("ඉතිහාස") || iframeModalPdfTitle.contains("History") || iframeModalPdfTitle.contains("සිතියම්")) {
-                      Surface(
-                        onClick = {
-                          showIframePdfModal = false
-                          currentScreen = "HISTORY_MAPS_AUTO_CHECKER"
-                        },
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF0284C7),
-                        modifier = Modifier.padding(end = 4.dp).testTag("pdf_history_maps_top_btn")
-                      ) {
-                        Row(
-                          modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
-                          verticalAlignment = Alignment.CenterVertically
+                          shape = RoundedCornerShape(6.dp),
+                          color = Color(0xFF1E293B),
+                          border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.5f))
                         ) {
-                          Text("🗺️", fontSize = 11.sp)
-                          Spacer(modifier = Modifier.width(2.dp))
-                          Text(
-                            text = "සිතියම් Check",
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                          )
+                          Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                          ) {
+                            Text(activeEyeCareMode.iconEmoji, fontSize = 10.sp)
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                              text = when (activeEyeCareMode) {
+                                EyeCareThemeMode.LIGHT -> "දිවා"
+                                EyeCareThemeMode.SEPIA -> "සේපියා"
+                                EyeCareThemeMode.DARK -> "රාත්‍රී"
+                                EyeCareThemeMode.BLUE_LIGHT_SHIELD -> "Shield"
+                              },
+                              color = Color(0xFF38BDF8),
+                              fontSize = 9.sp,
+                              fontWeight = FontWeight.Bold
+                            )
+                          }
+                        }
+                      }
+
+                      // 3. Zoom Controls (A- / A+)
+                      item {
+                        Surface(
+                          shape = RoundedCornerShape(6.dp),
+                          color = Color(0xFF1E293B),
+                          border = BorderStroke(1.dp, Color(0xFF334155))
+                        ) {
+                          Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 2.dp, vertical = 1.dp)
+                          ) {
+                            IconButton(
+                              onClick = {
+                                val newScale = (activeFontScale - 0.15f).coerceAtLeast(0.85f)
+                                activeFontScale = newScale
+                                saveFontScale(context, newScale)
+                              },
+                              modifier = Modifier.size(22.dp)
+                            ) {
+                              Text("A-", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Text(
+                              text = "${(activeFontScale * 100).toInt()}%",
+                              color = Color(0xFF94A3B8),
+                              fontSize = 8.sp,
+                              fontWeight = FontWeight.Bold
+                            )
+                            IconButton(
+                              onClick = {
+                                val newScale = (activeFontScale + 0.15f).coerceAtMost(1.45f)
+                                activeFontScale = newScale
+                                saveFontScale(context, newScale)
+                              },
+                              modifier = Modifier.size(22.dp)
+                            ) {
+                              Text("A+", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
+                          }
+                        }
+                      }
+
+                      // 4. Quiz Button
+                      item {
+                        Surface(
+                          onClick = { showPdfQuizBottomSheet = true },
+                          shape = RoundedCornerShape(6.dp),
+                          color = Color(0xFF4338CA)
+                        ) {
+                          Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                          ) {
+                            Text("🧠", fontSize = 10.sp)
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text("ක්විස්", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                          }
+                        }
+                      }
+
+                      // 5. Flashcards Button
+                      item {
+                        Surface(
+                          onClick = { showFlashcardsDialog = true },
+                          shape = RoundedCornerShape(6.dp),
+                          color = Color(0xFF15803D)
+                        ) {
+                          Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                          ) {
+                            Text("💡", fontSize = 10.sp)
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text("කාඩ්", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                          }
+                        }
+                      }
+
+                      // 6. 100-Pages Full PDF (if Math/Sandu)
+                      if (iframeModalPdfTitle.contains("ගණිත") || iframeModalPdfTitle.contains("Sandu") || iframeModalPdfTitle.contains("Math")) {
+                        item {
+                          Surface(
+                            onClick = {
+                              showIframePdfModal = false
+                              sanduTheoryGlobalInitialPage = 1
+                              showSanduTheoryFullReaderGlobal = true
+                            },
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF4F46E5)
+                          ) {
+                            Row(
+                              modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                              verticalAlignment = Alignment.CenterVertically
+                            ) {
+                              Text("📕", fontSize = 10.sp)
+                              Spacer(modifier = Modifier.width(2.dp))
+                              Text("පිටු 100ම (Full PDF)", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
+                          }
                         }
                       }
                     }
 
-                    if (iframeModalPdfTitle.contains("ගණිත") || iframeModalPdfTitle.contains("Sandu") || iframeModalPdfTitle.contains("Math")) {
-                      Surface(
-                        onClick = {
-                          showIframePdfModal = false
-                          sanduTheoryGlobalInitialPage = 1
-                          showSanduTheoryFullReaderGlobal = true
-                        },
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF4F46E5),
-                        modifier = Modifier.padding(end = 4.dp).testTag("pdf_math_sandu_100_pages_btn")
-                      ) {
-                        Row(
-                          modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
-                          verticalAlignment = Alignment.CenterVertically
-                        ) {
-                          Text("📕", fontSize = 11.sp)
-                          Spacer(modifier = Modifier.width(2.dp))
-                          Text(
-                            text = "පිටු 100ම (Full PDF)",
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                          )
-                        }
-                      }
-
-                      Surface(
-                        onClick = {
-                          showIframePdfModal = false
-                          currentScreen = "GRADE_10_11_MATH_SHORT_NOTES"
-                        },
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF10B981),
-                        modifier = Modifier.padding(end = 4.dp).testTag("pdf_math_sandu_top_btn")
-                      ) {
-                        Row(
-                          modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
-                          verticalAlignment = Alignment.CenterVertically
-                        ) {
-                          Text("📐", fontSize = 11.sp)
-                          Spacer(modifier = Modifier.width(2.dp))
-                          Text(
-                            text = "Sandu Theory",
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                          )
-                        }
-                      }
-                    }
-
-                    IconButton(
-                      onClick = { isFullScreenReadingMode = !isFullScreenReadingMode },
-                      modifier = Modifier.size(34.dp).testTag("pdf_fullscreen_btn")
-                    ) {
-                      Text(
-                        text = "⛶",
-                        fontSize = 18.sp,
-                        color = Color(0xFF38BDF8)
-                      )
-                    }
-
+                    // Close Button
                     IconButton(
                       onClick = { showIframePdfModal = false },
-                      modifier = Modifier.size(34.dp)
+                      modifier = Modifier.size(30.dp)
                     ) {
                       Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Close PDF",
                         tint = Color.White,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                       )
-                    }
-                  }
-
-                  // DRM Protection & Eye-Care Active Notice Strip
-                  Surface(
-                    color = Color(0xFF0F172A),
-                    modifier = Modifier.fillMaxWidth()
-                  ) {
-                    Row(
-                      modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 3.dp),
-                      verticalAlignment = Alignment.CenterVertically,
-                      horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                      Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                          imageVector = Icons.Default.Security,
-                          contentDescription = "Security",
-                          tint = Color(0xFF38BDF8),
-                          modifier = Modifier.size(11.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                          text = "🔒 DRM ආරක්ෂිතයි • පිටුවක් ටච් කර ෆුල් ස්ක්‍රීන් කරන්න",
-                          color = Color(0xFF94A3B8),
-                          fontSize = 9.sp,
-                          fontWeight = FontWeight.Medium
-                        )
-                      }
-
-                      Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                          text = "🌙 ${activeEyeCareMode.titleSinhala} • Zoom: ${(activeFontScale * 100).toInt()}%",
-                          color = Color(0xFF38BDF8),
-                          fontSize = 9.sp,
-                          fontWeight = FontWeight.Bold
-                        )
-                      }
                     }
                   }
                 }
               }
-            }
 
               // Full Screen Clean PDF WebView with Pinch-to-Zoom, Eye-Care CSS Filters and Anti-Copy Protection
               Box(
@@ -3508,25 +3474,19 @@ fun StudentPortalApp() {
                       isHapticFeedbackEnabled = false
                       setOnLongClickListener { true }
 
-                      addJavascriptInterface(
-                        object {
-                          @android.webkit.JavascriptInterface
-                          fun onPageTapped() {
-                            (ctx as? Activity)?.runOnUiThread {
-                              isFullScreenReadingMode = !isFullScreenReadingMode
-                            }
-                          }
-                        },
-                        "AndroidPdfBridge"
-                      )
+                      // Enable unrestricted vertical and horizontal scrolling
+                      isVerticalScrollBarEnabled = true
+                      isHorizontalScrollBarEnabled = true
+                      overScrollMode = android.view.View.OVER_SCROLL_ALWAYS
 
                       webViewClient = object : WebViewClient() {
                         override fun onPageFinished(view: WebView?, url: String?) {
                           super.onPageFinished(view, url)
-                          // Inject CSS & JavaScript to disable text selection, copy, cut, contextmenu, hide Google Drive buttons, and apply Eye-Care Night/Sepia filters
+                          // Inject CSS & JavaScript to disable text selection, copy, cut, contextmenu, hide Google Drive buttons, enable smooth scrolling, and apply Eye-Care Night/Sepia filters
                           val drmAndEyeCareJs = """
                             (function() {
                               var css = '* { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; -webkit-touch-callout: none !important; } ' +
+                                        'html, body { overflow-y: scroll !important; -webkit-overflow-scrolling: touch !important; height: auto !important; min-height: 100% !important; margin: 0 !important; padding: 0 !important; } ' +
                                         'div[aria-label="Download"], div[aria-label="Print"], div[aria-label="Pop-out"], .ndfHFb-c4YZDc-Wrql6b, button[title="Download"], button[title="Print"], .drive-viewer-toolstrip { display: none !important; pointer-events: none !important; }';
                               var head = document.head || document.getElementsByTagName('head')[0];
                               if (head) {
@@ -3542,14 +3502,8 @@ fun StudentPortalApp() {
                                 document.head.appendChild(meta);
                               }
                               meta.setAttribute('content', 'width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=8.0, user-scalable=yes');
-                              document.documentElement.style.touchAction = 'manipulation';
-                              document.body.style.touchAction = 'manipulation';
-
-                              document.addEventListener('click', function(e) {
-                                if (window.AndroidPdfBridge) {
-                                  window.AndroidPdfBridge.onPageTapped();
-                                }
-                              }, true);
+                              document.documentElement.style.touchAction = 'pan-x pan-y';
+                              document.body.style.touchAction = 'pan-x pan-y';
 
                               document.addEventListener('contextmenu', function(e) { e.preventDefault(); e.stopPropagation(); return false; }, true);
                               document.addEventListener('copy', function(e) { e.preventDefault(); e.stopPropagation(); return false; }, true);
@@ -3598,33 +3552,57 @@ fun StudentPortalApp() {
                   modifier = Modifier.fillMaxSize()
                 )
 
-                // Unobtrusive Fullscreen Exit Button when in fullscreen mode
+                // Floating Fullscreen Exit Button when in fullscreen mode
                 if (isFullScreenReadingMode) {
                   Surface(
                     onClick = { isFullScreenReadingMode = false },
                     shape = RoundedCornerShape(20.dp),
-                    color = Color.Black.copy(alpha = 0.70f),
+                    color = Color.Black.copy(alpha = 0.75f),
                     border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.7f)),
                     modifier = Modifier
                       .align(Alignment.TopEnd)
-                      .padding(12.dp)
-                      .statusBarsPadding()
+                      .padding(8.dp)
                   ) {
                     Row(
-                      modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                      modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
                       verticalAlignment = Alignment.CenterVertically
                     ) {
                       Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Exit Fullscreen",
                         tint = Color(0xFF38BDF8),
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(14.dp)
                       )
-                      Spacer(modifier = Modifier.width(4.dp))
+                      Spacer(modifier = Modifier.width(3.dp))
                       Text(
                         text = "සාමාන්‍ය තිරය",
                         color = Color.White,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                      )
+                    }
+                  }
+                } else {
+                  // Floating Fullscreen Toggle Button at bottom-right for instant 1-tap immersion
+                  Surface(
+                    onClick = { isFullScreenReadingMode = true },
+                    shape = RoundedCornerShape(18.dp),
+                    color = Color(0xFF0F172A).copy(alpha = 0.85f),
+                    border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.6f)),
+                    modifier = Modifier
+                      .align(Alignment.BottomEnd)
+                      .padding(10.dp)
+                  ) {
+                    Row(
+                      modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                      verticalAlignment = Alignment.CenterVertically
+                    ) {
+                      Text("⛶", fontSize = 11.sp, color = Color(0xFF38BDF8))
+                      Spacer(modifier = Modifier.width(3.dp))
+                      Text(
+                        text = "ෆුල් ස්ක්‍රීන්",
+                        color = Color.White,
+                        fontSize = 9.5.sp,
                         fontWeight = FontWeight.Bold
                       )
                     }
@@ -3637,109 +3615,11 @@ fun StudentPortalApp() {
                   )
                 }
               }
-
-              // Floating Eye-Care Quick Bar at bottom of PDF viewer (Hidden in Full Screen Mode)
-              AnimatedVisibility(visible = !isFullScreenReadingMode) {
-                Surface(
-                  color = Color(0xFF0F172A).copy(alpha = 0.96f),
-                  modifier = Modifier.fillMaxWidth()
-                ) {
-                Row(
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                  horizontalArrangement = Arrangement.SpaceBetween,
-                  verticalAlignment = Alignment.CenterVertically
-                ) {
-                  Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                  ) {
-                    EyeCareThemeMode.values().forEach { mode ->
-                      val isSelected = activeEyeCareMode == mode
-                      Surface(
-                        onClick = {
-                          activeEyeCareMode = mode
-                          saveEyeCareTheme(context, mode)
-                        },
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (isSelected) Color(0xFF38BDF8) else Color(0xFF1E293B),
-                        modifier = Modifier.padding(vertical = 1.dp)
-                      ) {
-                        Row(
-                          modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                          verticalAlignment = Alignment.CenterVertically
-                        ) {
-                          Text(mode.iconEmoji, fontSize = 11.sp)
-                          Spacer(modifier = Modifier.width(3.dp))
-                          Text(
-                            text = when (mode) {
-                              EyeCareThemeMode.LIGHT -> "දිවා"
-                              EyeCareThemeMode.SEPIA -> "සේපියා"
-                              EyeCareThemeMode.DARK -> "රාත්‍රී"
-                              EyeCareThemeMode.BLUE_LIGHT_SHIELD -> "Shield"
-                            },
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isSelected) Color(0xFF0F172A) else Color.White
-                          )
-                        }
-                      }
-                    }
-                  }
-
-                  Row(
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                  ) {
-                    IconButton(
-                      onClick = {
-                        val newScale = (activeFontScale - 0.15f).coerceAtLeast(0.85f)
-                        activeFontScale = newScale
-                        saveFontScale(context, newScale)
-                      },
-                      modifier = Modifier.size(28.dp)
-                    ) {
-                      Text("A-", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                    }
-
-                    Text(
-                      text = "${(activeFontScale * 100).toInt()}%",
-                      color = Color(0xFF94A3B8),
-                      fontSize = 9.sp,
-                      fontWeight = FontWeight.SemiBold
-                    )
-
-                    IconButton(
-                      onClick = {
-                        val newScale = (activeFontScale + 0.15f).coerceAtMost(1.45f)
-                        activeFontScale = newScale
-                        saveFontScale(context, newScale)
-                      },
-                      modifier = Modifier.size(28.dp)
-                    ) {
-                      Text("A+", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-
-                    IconButton(
-                      onClick = { showEyeCareSettingsSheet = true },
-                      modifier = Modifier.size(28.dp)
-                    ) {
-                      Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Eye-Care Settings",
-                        tint = Color(0xFF38BDF8),
-                        modifier = Modifier.size(15.dp)
-                      )
-                    }
-                  }
-                }
-              }
-              }
             }
           }
         }
       }
+
 
       // Sandu Theory 100-Pages Full PDF Book Reader Dialog
       if (showSanduTheoryFullReaderGlobal) {
@@ -5361,6 +5241,54 @@ fun AdminControlBannerBar(
               color = if (expiredCount > 0) Color(0xFFFFD1D9) else Color.White,
               maxLines = 1
             )
+          }
+        }
+      }
+
+      // Dedicated High-Priority Alert Strip in Admin Bar for New Pending Approvals
+      if (pendingCount > 0) {
+        Spacer(modifier = Modifier.height(8.dp))
+        Surface(
+          onClick = { onOpenDashboard("PENDING") },
+          shape = RoundedCornerShape(8.dp),
+          color = Color(0xFF7F1D1D),
+          border = BorderStroke(1.2.dp, Color(0xFFEF4444)),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+              Icon(
+                imageVector = Icons.Default.Notifications,
+                contentDescription = "Pending Alert",
+                tint = Color(0xFFFCA5A5),
+                modifier = Modifier.size(16.dp)
+              )
+              Spacer(modifier = Modifier.width(6.dp))
+              Text(
+                text = "🚨 නව අනුමැති ඉල්ලීම් $pendingCount ක් ඇත! (පරීක්ෂා කර අනුමත කරන්න)",
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+            }
+            Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = Color(0xFFDC2626)
+            ) {
+              Text(
+                text = "අනුමත කරන්න ❯",
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              )
+            }
           }
         }
       }
@@ -7898,8 +7826,9 @@ fun UnlimitedAccessPaymentDialog(
   onSubmitReceipt: (name: String, phone: String, requestedPackage: String, receiptUri: Uri?) -> Unit
 ) {
   val context = LocalContext.current
+  val savedPhone = getSavedLoggedInUserPhone(context) ?: ""
   var studentName by remember { mutableStateOf("") }
-  var studentPhone by remember { mutableStateOf("") }
+  var studentPhone by remember { mutableStateOf(savedPhone) }
   var selectedSlipUri by remember { mutableStateOf<Uri?>(null) }
   var selectedSlipName by remember { mutableStateOf<String?>(null) }
   var selectedPackage by remember { mutableStateOf(initialPackage) }
@@ -7920,8 +7849,6 @@ fun UnlimitedAccessPaymentDialog(
     }
   }
 
-  val whatsappUrl = "https://wa.me/94772843861?text=Hello,%20I%20would%20like%20to%20request%20Admin%20Approval%20for%20$selectedPackage.%20Student%20Name:%20${studentName.ifBlank { "Student" }},%20Phone:%20$studentPhone"
-
   Dialog(
     onDismissRequest = onDismiss,
     properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -7929,14 +7856,14 @@ fun UnlimitedAccessPaymentDialog(
     Box(
       modifier = Modifier
         .fillMaxWidth(0.95f)
-        .padding(16.dp),
+        .padding(14.dp),
       contentAlignment = Alignment.Center
     ) {
       Card(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 10.dp),
-        border = BorderStroke(1.dp, NeutralBorderLight),
+        border = BorderStroke(1.2.dp, Color(0xFFF59E0B)),
         modifier = Modifier
           .fillMaxWidth()
           .verticalScroll(rememberScrollState())
@@ -7944,7 +7871,7 @@ fun UnlimitedAccessPaymentDialog(
         Column(
           modifier = Modifier
             .fillMaxWidth()
-            .padding(20.dp),
+            .padding(18.dp),
           horizontalAlignment = Alignment.CenterHorizontally
         ) {
           // Header with Gold Badge and Close Button
@@ -7986,21 +7913,131 @@ fun UnlimitedAccessPaymentDialog(
             }
           }
 
-          Spacer(modifier = Modifier.height(10.dp))
+          Spacer(modifier = Modifier.height(8.dp))
 
           // 1. Title
           Text(
-            text = "Unlimited Access අනුමැතිය ලබාගැනීම (රු. 1,000 / මාස 6)",
+            text = "Unlimited Access ඇඩ්මින් අනුමැතිය ලබාගැනීම",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF1E293B),
-            fontSize = 17.sp,
+            color = Color(0xFF0F172A),
+            fontSize = 16.sp,
             modifier = Modifier.fillMaxWidth()
           )
 
-          Spacer(modifier = Modifier.height(8.dp))
+          Spacer(modifier = Modifier.height(10.dp))
 
-          // 2. Grade Package Selection UI
+          // 2. HIGHLIGHTED BANK DETAILS CARD (PROMINENTLY DISPLAYED AT TOP FOR STUDENT)
+          Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFFF0F7FF),
+            border = BorderStroke(1.5.dp, Color(0xFF3B82F6)),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  Icon(
+                    imageVector = Icons.Default.AccountBalance,
+                    contentDescription = "Bank",
+                    tint = BluePrimary,
+                    modifier = Modifier.size(20.dp)
+                  )
+                  Spacer(modifier = Modifier.width(8.dp))
+                  Text(
+                    text = "🏛️ ලංකා බැංකුව (Bank of Ceylon)",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = BluePrimary
+                  )
+                }
+
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = Color(0xFFDCFCE7),
+                  border = BorderStroke(1.dp, Color(0xFF86EFAC))
+                ) {
+                  Text(
+                    text = "රු. 1,000 (මාස 6)",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF15803D),
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                  )
+                }
+              }
+
+              HorizontalDivider(color = Color(0xFFBFDBFE), modifier = Modifier.padding(vertical = 8.dp))
+
+              // High-Visibility Account Number Box with 1-Tap Copy
+              Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White,
+                border = BorderStroke(1.5.dp, Color(0xFF2563EB)),
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                Row(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                  Column {
+                    Text(
+                      text = "💳 ගිණුම් අංකය (Account Number):",
+                      fontSize = 10.sp,
+                      fontWeight = FontWeight.Medium,
+                      color = Color(0xFF475569)
+                    )
+                    Text(
+                      text = "90313771",
+                      fontSize = 20.sp,
+                      fontWeight = FontWeight.ExtraBold,
+                      color = Color(0xFF1D4ED8),
+                      letterSpacing = 1.sp
+                    )
+                  }
+
+                  Button(
+                    onClick = {
+                      val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                      val clip = ClipData.newPlainText("Account Number", "90313771")
+                      clipboard.setPrimaryClip(clip)
+                      Toast.makeText(context, "✅ ගිණුම් අංකය (90313771) පිටපත් විය!", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D4ED8)),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.height(34.dp)
+                  ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy", modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Copy", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                  }
+                }
+              }
+
+              Spacer(modifier = Modifier.height(8.dp))
+
+              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("නම (Account Name):", fontSize = 11.sp, color = NeutralMedium)
+                Text("D.H.M A P DISANAYAKA", fontSize = 11.sp, color = NeutralDark, fontWeight = FontWeight.Bold)
+              }
+              Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("ශාඛාව (Branch):", fontSize = 11.sp, color = NeutralMedium)
+                Text("අඹන්පොල (Ambanpola)", fontSize = 11.sp, color = NeutralDark, fontWeight = FontWeight.Bold)
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(12.dp))
+
+          // 3. Grade Package Selection UI
           Text(
             text = "🎓 ඔබ අනුමැතිය ඉල්ලා සිටින ශ්‍රේණිය තෝරන්න:",
             fontWeight = FontWeight.Bold,
@@ -8059,119 +8096,7 @@ fun UnlimitedAccessPaymentDialog(
 
           Spacer(modifier = Modifier.height(12.dp))
 
-          // 3. Message Text
-          Text(
-            text = "අනුමැතිය සඳහා එක් වරක් පමණක් අය කෙරෙන, මාස 6කට රු. 1,000 ක ගෙවීම සිදු කර මාස 6ක් (දින 180ක්) පුරා ඔබ තෝරාගත් ශ්‍රේණිවල සියලුම කෙටි සටහන්, ප්‍රශ්න පත්‍ර (PDF) හා විශේෂාංග UNLIMITED පරිශීලනය කරන්න. මාස 6 සම්පූර්ණ වූ පසු ගිණුම ස්වයංක්‍රීයව අක්‍රිය වන අතර නැවත ඇඩ්මින් අනුමැතිය ලබාගත යුතුය.\n\nපහත සඳහන් බැංකු ගිණුමට මුදල් තැන්පත් කර, ලබාගන්නා රිසිට්පත (Bank Slip / Screenshot) පහත Upload Button එක හරහා හෝ WhatsApp හරහා අප වෙත යොමු කරන්න.",
-            fontSize = 11.sp,
-            lineHeight = 16.sp,
-            color = Color(0xFF334155),
-            modifier = Modifier.fillMaxWidth()
-          )
-
-          Spacer(modifier = Modifier.height(12.dp))
-
-          // 4. Bank Details Card (Styled nicely inside the modal)
-          Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = Color(0xFFF0F7FF),
-            border = BorderStroke(1.5.dp, Color(0xFF90CAF9)),
-            modifier = Modifier.fillMaxWidth()
-          ) {
-            Column(
-              modifier = Modifier.padding(14.dp)
-            ) {
-              Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(bottom = 8.dp)
-              ) {
-                Icon(
-                  imageVector = Icons.Default.AccountBalance,
-                  contentDescription = "Bank",
-                  tint = BluePrimary,
-                  modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                  text = "බැංකු ගිණුම් විස්තර (Bank Details)",
-                  fontWeight = FontWeight.Bold,
-                  fontSize = 13.sp,
-                  color = BluePrimary
-                )
-              }
-
-              HorizontalDivider(color = Color(0xFFBBDEFB), modifier = Modifier.padding(bottom = 8.dp))
-
-              Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("බැංකුව (Bank):", fontSize = 12.sp, color = NeutralMedium, fontWeight = FontWeight.Medium)
-                Text("ලංකා බැංකුව (Bank of Ceylon)", fontSize = 12.sp, color = NeutralDark, fontWeight = FontWeight.Bold)
-              }
-
-              Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("ශාඛාව (Branch):", fontSize = 12.sp, color = NeutralMedium, fontWeight = FontWeight.Medium)
-                Text("අඹන්පොල (Ambanpola)", fontSize = 12.sp, color = NeutralDark, fontWeight = FontWeight.Bold)
-              }
-
-              Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("නම (Account Name):", fontSize = 12.sp, color = NeutralMedium, fontWeight = FontWeight.Medium)
-                Text("D.H.M A P DISANAYAKA", fontSize = 12.sp, color = NeutralDark, fontWeight = FontWeight.Bold)
-              }
-
-              Spacer(modifier = Modifier.height(6.dp))
-
-              Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = Color.White,
-                border = BorderStroke(1.dp, Color(0xFF64B5F6)),
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-              ) {
-                Row(
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                  verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                  Column {
-                    Text("ගිණුම් අංකය (Account Number):", fontSize = 10.sp, color = NeutralMedium)
-                    Text("90313771", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = BluePrimary)
-                  }
-
-                  TextButton(
-                    onClick = {
-                      if (AppSecurityManager.canCopyContent(context)) {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val clip = ClipData.newPlainText("Account Number", "90313771")
-                        clipboard.setPrimaryClip(clip)
-                        Toast.makeText(context, "ගිණුම් අංකය Copy විය: 90313771", Toast.LENGTH_SHORT).show()
-                      } else {
-                        Toast.makeText(context, "ආරක්ෂක නීති අනුව Copy කිරීම අවහිර කර ඇත. ගිණුම් අංකය: 90313771 සටහන් කරගන්න.", Toast.LENGTH_LONG).show()
-                      }
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = BluePrimary)
-                  ) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy", modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Copy", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                  }
-                }
-              }
-            }
-          }
-
-          Spacer(modifier = Modifier.height(14.dp))
-
-          // 5. Two Payment Verification Options
-          Text(
-            text = "තහවුරු කිරීමේ ක්‍රම (Payment Verification Options):",
-            fontWeight = FontWeight.Bold,
-            fontSize = 13.sp,
-            color = NeutralDark,
-            modifier = Modifier.fillMaxWidth()
-          )
-
-          Spacer(modifier = Modifier.height(8.dp))
-
-          // Option A: Request Form & Slip Upload Card
+          // 4. Student Input Details Card
           Surface(
             shape = RoundedCornerShape(14.dp),
             color = Color(0xFFF8FAFC),
@@ -8179,26 +8104,14 @@ fun UnlimitedAccessPaymentDialog(
             modifier = Modifier.fillMaxWidth()
           ) {
             Column(modifier = Modifier.padding(14.dp)) {
-              Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                  shape = CircleShape,
-                  color = BluePrimary,
-                  modifier = Modifier.size(22.dp)
-                ) {
-                  Box(contentAlignment = Alignment.Center) {
-                    Text("1", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                  }
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                  text = "අනුමැති ඉල්ලුම්පත (Approval Request Form)",
-                  fontWeight = FontWeight.Bold,
-                  fontSize = 13.sp,
-                  color = NeutralDark
-                )
-              }
+              Text(
+                text = "📝 ඔබගේ තොරතුරු (Student Information)",
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+                color = NeutralDark
+              )
 
-              Spacer(modifier = Modifier.height(10.dp))
+              Spacer(modifier = Modifier.height(8.dp))
 
               androidx.compose.material3.OutlinedTextField(
                 value = studentName,
@@ -8213,22 +8126,22 @@ fun UnlimitedAccessPaymentDialog(
               androidx.compose.material3.OutlinedTextField(
                 value = studentPhone,
                 onValueChange = { studentPhone = it },
-                label = { Text("දුරකථන අංකය (Phone Number)") },
+                label = { Text("දුරකථන / WhatsApp අංකය (Phone)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
               )
 
-              Spacer(modifier = Modifier.height(12.dp))
+              Spacer(modifier = Modifier.height(10.dp))
 
               // Bank Slip Selection Section
               Text(
                 text = "බැංකු රිසිට්පත (Bank Slip / Screenshot) - විකල්ප (Optional):",
-                fontSize = 11.sp,
+                fontSize = 10.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color(0xFF475569)
               )
 
-              Spacer(modifier = Modifier.height(6.dp))
+              Spacer(modifier = Modifier.height(4.dp))
 
               if (selectedSlipUri != null) {
                 Surface(
@@ -8278,123 +8191,121 @@ fun UnlimitedAccessPaymentDialog(
                   onClick = { slipPickerLauncher.launch("image/*") },
                   shape = RoundedCornerShape(8.dp),
                   border = BorderStroke(1.dp, Color(0xFF94A3B8)),
-                  modifier = Modifier.fillMaxWidth().height(40.dp)
+                  modifier = Modifier.fillMaxWidth().height(38.dp)
                 ) {
                   Icon(
                     imageVector = Icons.Default.UploadFile,
                     contentDescription = "Select Slip",
                     tint = Color(0xFF475569),
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(16.dp)
                   )
                   Spacer(modifier = Modifier.width(6.dp))
                   Text(
                     text = "📎 බැංකු රිසිට්පත තෝරන්න (Bank Slip Upload)",
-                    fontSize = 11.sp,
+                    fontSize = 10.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF334155)
                   )
                 }
               }
-
-              Text(
-                text = "💡 ස්ලිප් එක මෙතැනින් හෝ WhatsApp මඟින් අප වෙත යොමු කළ හැක.",
-                fontSize = 10.sp,
-                color = Color(0xFF64748B),
-                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
-              )
-
-              // Submit Approval Request Button (Directly below slip upload)
-              Button(
-                onClick = {
-                  if (studentName.isBlank() || studentPhone.isBlank()) {
-                    Toast.makeText(context, "කරුණාකර ඔබගේ නම සහ දුරකථන අංකය ඇතුළත් කරන්න", Toast.LENGTH_SHORT).show()
-                  } else {
-                    onSubmitReceipt(studentName.trim(), studentPhone.trim(), selectedPackage, selectedSlipUri)
-                    Toast.makeText(
-                      context,
-                      "අනුමැති ඉල්ලීම සාර්ථකව යොමු කරන ලදී! ඇඩ්මින් විසින් පරීක්ෂා කර ඔබගේ ගිණුම සක්‍රිය කරනු ඇත.",
-                      Toast.LENGTH_LONG
-                    ).show()
-                    onDismiss()
-                  }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF137333)),
-                shape = RoundedCornerShape(10.dp),
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .height(46.dp)
-              ) {
-                Icon(
-                  imageVector = Icons.Default.Send,
-                  contentDescription = "Submit Request",
-                  tint = Color.White,
-                  modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                  text = if (selectedSlipUri != null) "රිසිට්පත සහ අනුමැති ඉල්ලීම යොමු කරන්න" else "ඇඩ්මින් අනුමැතිය ඉල්ලුම් කරන්න (Submit Request)",
-                  fontWeight = FontWeight.Bold,
-                  fontSize = 12.sp,
-                  color = Color.White
-                )
-              }
             }
+          }
+
+          Spacer(modifier = Modifier.height(14.dp))
+
+          // 5. PRIMARY ACTION: AUTOMATICALLY RECORDS IN APP AND LAUNCHES WHATSAPP DIRECTLY TO ADMIN
+          Button(
+            onClick = {
+              if (studentName.isBlank() || studentPhone.isBlank()) {
+                Toast.makeText(context, "කරුණාකර ඔබගේ නම සහ දුරකථන අංකය ඇතුළත් කරන්න", Toast.LENGTH_SHORT).show()
+              } else {
+                // Step A: Automatically register / record in app database immediately!
+                onSubmitReceipt(studentName.trim(), studentPhone.trim(), selectedPackage, selectedSlipUri)
+
+                // Step B: Format pre-filled WhatsApp message for Admin
+                val nowTimeFormatted = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
+                val (_, devName) = getDeviceIdentifier(context)
+                val slipNote = if (selectedSlipUri != null) "රිසිට්පත තෝරා ඇත (ස්ලිප් පත මෙයට අමුණා ඇත)" else "WhatsApp හරහා රිසිට්පත එවනු ලැබේ"
+                val wpMessage = """
+🌟 *O/L Study Portal - ඇඩ්මින් අනුමැති ඉල්ලීම* 🌟
+-----------------------------------------
+👤 *ශිෂ්‍යයාගේ නම:* ${studentName.trim()}
+📞 *දුරකථන අංකය:* ${studentPhone.trim()}
+📦 *ඉල්ලුම් කළ පැකේජය:* $selectedPackage
+💰 *ගෙවීම් මුදල:* රු. 1,000 (මාස 6ක් සඳහා)
+🏦 *තැන්පත් කළ ගිණුම:* ලංකා බැංකුව 90313771
+📅 *දිනය:* $nowTimeFormatted
+📱 *දුරකථනය:* $devName
+-----------------------------------------
+මම ලංකා බැංකුවේ 90313771 ගිණුමට රු. 1,000 තැන්පත් කළ අතර, ඇප් එක තුළද අනුමැති ඉල්ලීම ස්වයංක්‍රීයව සටහන් විය. කරුණාකර මගේ ගිණුම අනුමත කර දෙන්න. ($slipNote)
+""".trimIndent()
+
+                val wpUri = Uri.parse("https://wa.me/94772843861?text=" + Uri.encode(wpMessage))
+                val intent = Intent(Intent.ACTION_VIEW, wpUri)
+                try {
+                  context.startActivity(intent)
+                } catch (_: Exception) {
+                  Toast.makeText(context, "WhatsApp විවෘත කිරීමට නොහැකි විය: 0772843861 අංකයට යොමු කරන්න", Toast.LENGTH_LONG).show()
+                }
+
+                Toast.makeText(
+                  context,
+                  "✅ අනුමැති ඉල්ලීම ඇප් එකේ සටහන් විය! දැන් WhatsApp හරහා ඇඩ්මින්ට යවන්න.",
+                  Toast.LENGTH_LONG
+                ).show()
+                onDismiss()
+              }
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(50.dp)
+          ) {
+            Icon(Icons.Default.Chat, contentDescription = "WhatsApp", tint = Color.White, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+              text = "ඇඩ්මින් අනුමැතිය ඉල්ලුම් කර WhatsApp හරහා යවන්න",
+              fontWeight = FontWeight.Bold,
+              fontSize = 11.5.sp,
+              color = Color.White
+            )
+          }
+
+          Spacer(modifier = Modifier.height(8.dp))
+
+          // SECONDARY ACTION: SUBMIT WITHIN APP ONLY
+          OutlinedButton(
+            onClick = {
+              if (studentName.isBlank() || studentPhone.isBlank()) {
+                Toast.makeText(context, "කරුණාකර ඔබගේ නම සහ දුරකථන අංකය ඇතුළත් කරන්න", Toast.LENGTH_SHORT).show()
+              } else {
+                onSubmitReceipt(studentName.trim(), studentPhone.trim(), selectedPackage, selectedSlipUri)
+                Toast.makeText(
+                  context,
+                  "✅ අනුමැති ඉල්ලීම සාර්ථකව යොමු කරන ලදී! ඇඩ්මින් විසින් පරීක්ෂා කර ඔබගේ ගිණුම සක්‍රිය කරනු ඇත.",
+                  Toast.LENGTH_LONG
+                ).show()
+                onDismiss()
+              }
+            },
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, Color(0xFF137333)),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF137333)),
+            modifier = Modifier.fillMaxWidth().height(40.dp)
+          ) {
+            Icon(Icons.Default.Send, contentDescription = "Submit", modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = "ඇප් එක හරහා පමණක් යොමු කරන්න (Submit in App Only)",
+              fontWeight = FontWeight.SemiBold,
+              fontSize = 10.5.sp
+            )
           }
 
           Spacer(modifier = Modifier.height(12.dp))
 
-          // Option B: WhatsApp Direct Button Card
-          Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = Color(0xFFF0FDF4),
-            border = BorderStroke(1.dp, Color(0xFFBBF7D0)),
-            modifier = Modifier.fillMaxWidth()
-          ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-              Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                  shape = CircleShape,
-                  color = Color(0xFF25D366),
-                  modifier = Modifier.size(22.dp)
-                ) {
-                  Box(contentAlignment = Alignment.Center) {
-                    Text("2", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                  }
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                  text = "WhatsApp හරහා රිසිට්පත / විස්තර යොමු කරන්න",
-                  fontWeight = FontWeight.Bold,
-                  fontSize = 12.sp,
-                  color = Color(0xFF14532D)
-                )
-              }
-
-              Spacer(modifier = Modifier.height(10.dp))
-
-              Button(
-                onClick = {
-                  try {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(whatsappUrl))
-                    context.startActivity(intent)
-                  } catch (e: Exception) {
-                    Toast.makeText(context, "WhatsApp විවෘත කිරීමට නොහැකි විය: 0772843861 අංකයට යොමු කරන්න", Toast.LENGTH_LONG).show()
-                  }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
-                shape = RoundedCornerShape(10.dp),
-                modifier = Modifier.fillMaxWidth().height(44.dp)
-              ) {
-                Icon(Icons.Default.Chat, contentDescription = "WhatsApp", tint = Color.White)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("WhatsApp හරහා රිසිට්පත යවන්න (0772843861)", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
-              }
-            }
-          }
-
-          Spacer(modifier = Modifier.height(16.dp))
-
-          // 6. Contact Support Note & Footnote
+          // 6. Direct WhatsApp Support Link
           Surface(
             shape = RoundedCornerShape(8.dp),
             color = Color(0xFFF1F5F9),
@@ -8407,7 +8318,7 @@ fun UnlimitedAccessPaymentDialog(
                   try {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/94772843861"))
                     context.startActivity(intent)
-                  } catch (e: Exception) {}
+                  } catch (_: Exception) {}
                 }
                 .padding(horizontal = 10.dp, vertical = 8.dp),
               verticalAlignment = Alignment.CenterVertically
@@ -8415,10 +8326,9 @@ fun UnlimitedAccessPaymentDialog(
               Icon(Icons.Default.Phone, contentDescription = "Support", tint = BluePrimary, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(6.dp))
               Text(
-                text = "වැඩිදුර සහය සඳහා වට්සැප් හරහා සම්බන්ධ වෙන්න : 0772843861",
-                fontSize = 11.sp,
-                color = Color(0xFF1E293B),
-                fontWeight = FontWeight.Medium
+                text = "වැඩිදුර සහය සඳහා ඇඩ්මින් අමතන්න (WhatsApp) : 0772843861",
+                fontSize = 10.5.sp,
+                color = Color(0xFF1E293B)
               )
             }
           }
@@ -8894,14 +8804,65 @@ fun LoginAndApprovalDialog(
               color = NeutralDark,
               modifier = Modifier.fillMaxWidth()
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
               text = "ලියාපදිංචි වන මුල් දුරකථනයට පමණක් ගිණුම ආරක්ෂිතව සම්බන්ධ වේ (Device Locked).",
               fontSize = 11.sp,
               color = NeutralMedium,
               modifier = Modifier.fillMaxWidth()
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Prominent Bank Account Details Card for New Students
+            Surface(
+              shape = RoundedCornerShape(12.dp),
+              color = Color(0xFFF0F7FF),
+              border = BorderStroke(1.5.dp, Color(0xFF3B82F6)),
+              modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+            ) {
+              Column(modifier = Modifier.padding(10.dp)) {
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  modifier = Modifier.fillMaxWidth()
+                ) {
+                  Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.AccountBalance, contentDescription = "Bank", tint = BluePrimary, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("🏛️ ලංකා බැංකුව (Bank of Ceylon)", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = BluePrimary)
+                  }
+                  Text("රු. 1,000 / මාස 6", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D))
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Column {
+                    Text("ගිණුම් අංකය (Account Number):", fontSize = 9.5.sp, color = NeutralMedium)
+                    Text("90313771", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1D4ED8))
+                  }
+                  Button(
+                    onClick = {
+                      val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                      val clip = ClipData.newPlainText("Account Number", "90313771")
+                      clipboard.setPrimaryClip(clip)
+                      Toast.makeText(context, "✅ ගිණුම් අංකය (90313771) පිටපත් විය!", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D4ED8)),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.height(28.dp)
+                  ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy", modifier = Modifier.size(12.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text("Copy", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                  }
+                }
+                Text("D.H.M A P DISANAYAKA • අඹන්පොල ශාඛාව", fontSize = 9.5.sp, color = Color(0xFF475569))
+              }
+            }
 
             androidx.compose.material3.OutlinedTextField(
               value = regName,
@@ -8973,7 +8934,8 @@ fun LoginAndApprovalDialog(
                     requestDate = currentNowFormatted,
                     requestTimestamp = currentNow
                   )
-                  registeredUsers.add(newAcc)
+                  registeredUsers.add(0, newAcc)
+                  onUsersUpdated()
                   onLoginSuccess(newAcc)
                   Toast.makeText(context, "ලියාපදිංචිය සාර්ථකයි! ඇප් එක පරිශීලනයට ඇඩ්මින් අනුමැතිය (Admin Approval) ලබාගන්න.", Toast.LENGTH_LONG).show()
                   regName = ""
